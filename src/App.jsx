@@ -1,15 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 
-import { generateId, today } from "./utils/helpers";
-import { formatCurrency, formatDate , numberToWords} from "./utils/formatters";
-import { validateGSTIN } from "./utils/validators";
-import {
-  PRODUCT_CATEGORIES,
-  UNITS,
-  STATES,
-  TRANSPORT_MODES,
-  COMPANY,
-} from "./constants";
+import { COMPANY } from "./constants";
 
 // Supabase
 import { supabase } from "./lib/supabase";
@@ -25,45 +16,26 @@ import * as purchasesService from "./services/purchases";
 // Pages
 import { LoginPage } from "./pages/LoginPage";
 
-// ─── UI COMPONENTS ───────────────────────────────────────────────────────────
-
+// UI
 import { Icons } from "./components/ui/Icons";
-import { Badge } from "./components/ui/Badge";
-import { Button } from "./components/ui/Button";
-import { Input } from "./components/ui/Input";
-import { Select } from "./components/ui/Select";
-import { Card } from "./components/ui/Card";
-import { Stat } from "./components/ui/Stat";
-import { Table } from "./components/ui/Table";
-import { Modal } from "./components/ui/Modal";
-import { Tabs } from "./components/ui/Tabs";
-import { EmptyState } from "./components/ui/EmptyState";
-import { SearchBar } from "./components/ui/SearchBar";
 
-//MODULES
+// Modules
 import { Dashboard } from "./modules/DashBoard";
 import { CustomerModule } from "./modules/CustomerModule";
 import { TransporterModule } from "./modules/TransporterModule";
 import { ReportsModule } from "./modules/ReportsModule";
-import { GSTModule } from "./modules/GSTModule";
 import { PurchaseModule } from "./modules/PurchaseModule";
 import { InventoryModule } from "./modules/InventoryModule";
-import { BillingEInvoiceModule } from "./modules/BillingEInvoiceModule";
-import { EWayModule } from "./modules/EWayModule";
-import { IRNCancellationModule } from "./modules/IRNCancellationModule";
 import { RetailInvoiceModule } from "./modules/RetailInvoiceModule";
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP LAYOUT
 // ═══════════════════════════════════════════════════════════════════════════════
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: Icons.home },
   { key: "retail", label: "Retail Invoice", icon: Icons.receipt },
-  { key: "billing", label: "Tax Invoice", icon: Icons.receipt },
-  { key: "eway", label: "E-Way Bill", icon: Icons.truck },
-  { key: "irncancel", label: "IRN Cancellation", icon: Icons.x },
   { key: "inventory", label: "Inventory", icon: Icons.box },
   { key: "purchase", label: "Purchase", icon: Icons.cart },
-  { key: "gst", label: "GST & Tax", icon: Icons.percent },
   { key: "customers", label: "Parties", icon: Icons.users },
   { key: "transporters", label: "Transporters", icon: Icons.truck },
   { key: "reports", label: "Reports", icon: Icons.chart },
@@ -73,7 +45,6 @@ export default function App() {
   // Authentication state
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
   // App state
   const [page, setPage] = useState("dashboard");
@@ -88,18 +59,21 @@ export default function App() {
   const [transporters, _setTransporters] = useState([]);
   const [invoices, _setInvoices] = useState([]);
   const [purchases, _setPurchases] = useState([]);
-  const [gspConfig, _setGspConfig] = useState(null);
+  const [_gspConfig, _setGspConfig] = useState(null);
 
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
         if (session?.user) {
           setUser(session.user);
         }
       } catch (err) {
-        console.error('Auth check failed:', err);
+        console.error("Auth check failed:", err);
       } finally {
         setAuthLoading(false);
       }
@@ -107,8 +81,9 @@ export default function App() {
 
     checkAuth();
 
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
 
@@ -148,8 +123,8 @@ export default function App() {
           backendUrl: "",
         });
       } catch (err) {
-        console.error('Failed to load data:', err);
-        setError(err.message || 'Failed to load data from database');
+        console.error("Failed to load data:", err);
+        setError(err.message || "Failed to load data from database");
       } finally {
         setLoading(false);
       }
@@ -160,62 +135,69 @@ export default function App() {
 
   // Persisted setters: wrap real state with Supabase sync
   const setProducts = async (updater) => {
-  const prev = products;
-  const rawNext = typeof updater === "function" ? updater(prev) : updater;
+    const prev = products;
+    const rawNext = typeof updater === "function" ? updater(prev) : updater;
 
-  const skipIds = new Set(
-    rawNext.filter(item => item?.__skipSync).map(item => item.id)
-  );
+    const skipIds = new Set(
+      rawNext.filter((item) => item?.__skipSync).map((item) => item.id)
+    );
 
-  const next = rawNext.map(item => {
-    const { __skipSync, ...clean } = item;
-    return clean;
-  });
+    const next = rawNext.map((item) => {
+      const { __skipSync, ...clean } = item;
+      return clean;
+    });
 
-  const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-  const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
-  try {
-    for (const item of next) {
-      if (skipIds.has(item.id)) continue;
+    try {
+      for (const item of next) {
+        if (skipIds.has(item.id)) continue;
 
-      if (!prevMap[item.id]) {
-        await productsService.create(item);
-      } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
-        await productsService.update(item.id, item);
+        if (!prevMap[item.id]) {
+          await productsService.create(item);
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
+          await productsService.update(item.id, item);
+        }
       }
+
+      for (const item of prev) {
+        if (!nextMap[item.id]) {
+          await productsService.delete_(item.id);
+        }
+      }
+    } catch (err) {
+      console.error("Product save error:", err);
+      setError(err.message);
+      return;
     }
 
-    for (const item of prev) {
-      if (!nextMap[item.id]) await productsService.delete_(item.id);
-    }
-  } catch (err) {
-    console.error("Product save error:", err);
-    setError(err.message);
-    return;
-  }
-
-  _setProducts(next);
-};
+    _setProducts(next);
+  };
 
   const setCustomers = async (updater) => {
     const prev = customers;
     const next = typeof updater === "function" ? updater(prev) : updater;
 
-    const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-    const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
     try {
       for (const item of next) {
-        if (!prevMap[item.id]) await customersService.create(item);
-        else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id]))
+        if (!prevMap[item.id]) {
+          await customersService.create(item);
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
           await customersService.update(item.id, item);
+        }
       }
+
       for (const item of prev) {
-        if (!nextMap[item.id]) await customersService.delete_(item.id);
+        if (!nextMap[item.id]) {
+          await customersService.delete_(item.id);
+        }
       }
     } catch (err) {
-      console.error('Customer save error:', err);
+      console.error("Customer save error:", err);
       setError(err.message);
       return;
     }
@@ -227,20 +209,25 @@ export default function App() {
     const prev = suppliers;
     const next = typeof updater === "function" ? updater(prev) : updater;
 
-    const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-    const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
     try {
       for (const item of next) {
-        if (!prevMap[item.id]) await suppliersService.create(item);
-        else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id]))
+        if (!prevMap[item.id]) {
+          await suppliersService.create(item);
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
           await suppliersService.update(item.id, item);
+        }
       }
+
       for (const item of prev) {
-        if (!nextMap[item.id]) await suppliersService.delete_(item.id);
+        if (!nextMap[item.id]) {
+          await suppliersService.delete_(item.id);
+        }
       }
     } catch (err) {
-      console.error('Supplier save error:', err);
+      console.error("Supplier save error:", err);
       setError(err.message);
       return;
     }
@@ -252,20 +239,25 @@ export default function App() {
     const prev = transporters;
     const next = typeof updater === "function" ? updater(prev) : updater;
 
-    const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-    const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
     try {
       for (const item of next) {
-        if (!prevMap[item.id]) await transportersService.create(item);
-        else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id]))
+        if (!prevMap[item.id]) {
+          await transportersService.create(item);
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
           await transportersService.update(item.id, item);
+        }
       }
+
       for (const item of prev) {
-        if (!nextMap[item.id]) await transportersService.delete_(item.id);
+        if (!nextMap[item.id]) {
+          await transportersService.delete_(item.id);
+        }
       }
     } catch (err) {
-      console.error('Transporter save error:', err);
+      console.error("Transporter save error:", err);
       setError(err.message);
       return;
     }
@@ -274,86 +266,82 @@ export default function App() {
   };
 
   const setInvoices = async (updater) => {
-  const prev = invoices;
-  const rawNext = typeof updater === "function" ? updater(prev) : updater;
+    const prev = invoices;
+    const rawNext = typeof updater === "function" ? updater(prev) : updater;
 
-  const skipIds = new Set(
-    rawNext.filter(item => item?.__skipSync).map(item => item.id)
-  );
+    const skipIds = new Set(
+      rawNext.filter((item) => item?.__skipSync).map((item) => item.id)
+    );
 
-  const next = rawNext.map(item => {
-    const { __skipSync, ...clean } = item;
-    return clean;
-  });
+    const next = rawNext.map((item) => {
+      const { __skipSync, ...clean } = item;
+      return clean;
+    });
 
-  const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-  const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
-  try {
-    for (const item of next) {
-      if (!prevMap[item.id]) {
-        if (!skipIds.has(item.id)) {
-          await invoicesService.create(item);
-        }
-      } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
-        const changes = {};
-        if (item.irn !== prevMap[item.id].irn) {
-          changes.irn = item.irn;
-          changes.ackNo = item.ackNo;
-          changes.ackDate = item.ackDate;
-          changes.signedInvoice = item.signedInvoice;
-          changes.signedQRCode = item.signedQRCode;
-          changes.jsonSigned = item.jsonSigned;
-          await invoicesService.updateIRN(item.id, changes);
-        } else if (item.ewayBillId !== prevMap[item.id].ewayBillId) {
-          await invoicesService.updateEWB(item.id, item);
-        } else {
-          await invoicesService.update(item.id, item);
+    try {
+      for (const item of next) {
+        if (!prevMap[item.id]) {
+          if (!skipIds.has(item.id)) {
+            await invoicesService.create(item);
+          }
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
+          const changes = {};
+
+          if (item.irn !== prevMap[item.id].irn) {
+            changes.irn = item.irn;
+            changes.ackNo = item.ackNo;
+            changes.ackDate = item.ackDate;
+            changes.signedInvoice = item.signedInvoice;
+            changes.signedQRCode = item.signedQRCode;
+            changes.jsonSigned = item.jsonSigned;
+            await invoicesService.updateIRN(item.id, changes);
+          } else if (item.ewayBillId !== prevMap[item.id].ewayBillId) {
+            await invoicesService.updateEWB(item.id, item);
+          } else {
+            await invoicesService.update(item.id, item);
+          }
         }
       }
+    } catch (err) {
+      console.error("Invoice save error:", err);
+      setError(err.message);
+      return;
     }
 
-    for (const item of prev) {
-      if (!nextMap[item.id]) {
-      }
-    }
-  } catch (err) {
-    console.error("Invoice save error:", err);
-    setError(err.message);
-    return;
-  }
-
-  _setInvoices(next);
-};
+    _setInvoices(next);
+  };
 
   const setPurchases = async (updater) => {
     const prev = purchases;
     const next = typeof updater === "function" ? updater(prev) : updater;
 
-    const prevMap = Object.fromEntries(prev.map(i => [i.id, i]));
-    const nextMap = Object.fromEntries(next.map(i => [i.id, i]));
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
     try {
       for (const item of next) {
-        if (!prevMap[item.id]) await purchasesService.create(item);
-        else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id]))
+        if (!prevMap[item.id]) {
+          await purchasesService.create(item);
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
           await purchasesService.update(item.id, item);
+        }
       }
+
       for (const item of prev) {
-        if (!nextMap[item.id]) await purchasesService.delete_(item.id);
+        if (!nextMap[item.id]) {
+          await purchasesService.delete_(item.id);
+        }
       }
     } catch (err) {
-      console.error('Purchase save error:', err);
+      console.error("Purchase save error:", err);
       setError(err.message);
       return;
     }
 
     _setPurchases(next);
-  };
-
-  const setGspConfig = (cfg) => {
-    // GSP Config is not persisted to DB - just local state
-    _setGspConfig(cfg);
   };
 
   // Authentication handlers
@@ -377,7 +365,6 @@ export default function App() {
     try {
       await supabase.auth.signOut();
       setUser(null);
-      // Only clear local state, don't trigger Supabase sync functions
       _setProducts([]);
       _setCustomers([]);
       _setSuppliers([]);
@@ -386,16 +373,18 @@ export default function App() {
       _setPurchases([]);
       setPage("dashboard");
     } catch (err) {
-      console.error('Logout failed:', err);
+      console.error("Logout failed:", err);
     }
   };
 
-  const navigate = useCallback((p) => { setPage(p); setSidebarOpen(false); }, []);
+  const navigate = useCallback((p) => {
+    setPage(p);
+    setSidebarOpen(false);
+  }, []);
 
-  const currentNav = NAV_ITEMS.find(n => n.key === page);
-  const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
+  const currentNav = NAV_ITEMS.find((n) => n.key === page);
+  const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
 
-  // Show login page if not authenticated
   if (authLoading) {
     return (
       <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 items-center justify-center">
@@ -413,22 +402,81 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard": return <Dashboard invoices={invoices} products={products} purchases={purchases} />;
-      case "billing": return  <BillingEInvoiceModule products={products} setProducts={setProducts} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} company={COMPANY} />;
-      case "retail": return <RetailInvoiceModule products={products} setProducts={setProducts} customers={customers} setCustomers={setCustomers} invoices={invoices} setInvoices={setInvoices} company={COMPANY} /> ;
-      case "inventory": return <InventoryModule products={products} setProducts={setProducts} />;
-      case "purchase": return <PurchaseModule products={products} setProducts={setProducts} suppliers={suppliers} purchases={purchases} setPurchases={setPurchases} />;
-      case "gst": return <GSTModule products={products} invoices={invoices} company={COMPANY} />;
-      case "eway": return <EWayModule invoices={invoices} customers={customers} transporters={transporters} setInvoices={setInvoices} />;
-      case "irncancel":  return <IRNCancellationModule invoices={invoices} />;
-      case "customers": return <CustomerModule customers={customers} setCustomers={setCustomers} suppliers={suppliers} setSuppliers={setSuppliers} invoices={invoices} />;
-      case "transporters": return <TransporterModule transporters={transporters} setTransporters={setTransporters} />;
-      case "reports": return <ReportsModule invoices={invoices} products={products} purchases={purchases} />;
-      default: return <Dashboard invoices={invoices} products={products} purchases={purchases} />;
+      case "dashboard":
+        return (
+          <Dashboard
+            invoices={invoices}
+            products={products}
+            purchases={purchases}
+          />
+        );
+
+      case "retail":
+        return (
+          <RetailInvoiceModule
+            products={products}
+            setProducts={setProducts}
+            customers={customers}
+            setCustomers={setCustomers}
+            invoices={invoices}
+            setInvoices={setInvoices}
+            company={COMPANY}
+          />
+        );
+
+      case "inventory":
+        return <InventoryModule products={products} setProducts={setProducts} />;
+
+      case "purchase":
+        return (
+          <PurchaseModule
+            products={products}
+            setProducts={setProducts}
+            suppliers={suppliers}
+            purchases={purchases}
+            setPurchases={setPurchases}
+          />
+        );
+
+      case "customers":
+        return (
+          <CustomerModule
+            customers={customers}
+            setCustomers={setCustomers}
+            suppliers={suppliers}
+            setSuppliers={setSuppliers}
+            invoices={invoices}
+          />
+        );
+
+      case "transporters":
+        return (
+          <TransporterModule
+            transporters={transporters}
+            setTransporters={setTransporters}
+          />
+        );
+
+      case "reports":
+        return (
+          <ReportsModule
+            invoices={invoices}
+            products={products}
+            purchases={purchases}
+          />
+        );
+
+      default:
+        return (
+          <Dashboard
+            invoices={invoices}
+            products={products}
+            purchases={purchases}
+          />
+        );
     }
   };
 
-  // Show loading screen
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
@@ -440,15 +488,18 @@ export default function App() {
     );
   }
 
-  // Show error screen
   if (error) {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-red-600 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Connection Error</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Connection Error
+          </h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          <p className="text-sm text-gray-500">Check your Supabase credentials in the .env file</p>
+          <p className="text-sm text-gray-500">
+            Check your Supabase credentials in the .env file
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="mt-6 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800"
@@ -462,53 +513,85 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar Overlay (mobile) */}
-      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-56 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-56 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
         <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
-          <div className="w-7 h-7 bg-gray-900 rounded flex items-center justify-center text-white text-xs font-bold">R</div>
+          <div className="w-7 h-7 bg-gray-900 rounded flex items-center justify-center text-white text-xs font-bold">
+            R
+          </div>
           <div className="min-w-0">
-            <div className="text-sm font-bold text-gray-900 truncate">Rudra Granites</div>
+            <div className="text-sm font-bold text-gray-900 truncate">
+              Rudra Granites
+            </div>
             <div className="text-[10px] text-gray-400 truncate">POS System</div>
           </div>
         </div>
+
         <nav className="flex-1 py-2 overflow-y-auto">
-          {NAV_ITEMS.map(item => {
+          {NAV_ITEMS.map((item) => {
             const IconComp = item.icon;
             const isActive = page === item.key;
+
             return (
-              <button key={item.key} onClick={() => navigate(item.key)}
-                className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${isActive ? "bg-gray-100 text-gray-900 font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}>
+              <button
+                key={item.key}
+                onClick={() => navigate(item.key)}
+                className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                  isActive
+                    ? "bg-gray-100 text-gray-900 font-medium"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
                 <IconComp size={16} />
                 <span className="truncate">{item.label}</span>
-                {item.key === "inventory" && lowStockCount > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">{lowStockCount}</span>}
+                {item.key === "inventory" && lowStockCount > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                    {lowStockCount}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
+
         <div className="px-4 py-3 border-t border-gray-100 text-[10px] text-gray-400">
           <div>GSTIN: {COMPANY.gstin}</div>
           <div className="truncate">{COMPANY.stateName}</div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Bar */}
         <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3">
-            <button className="lg:hidden text-gray-500 hover:text-gray-700" onClick={() => setSidebarOpen(true)}><Icons.menu size={20} /></button>
+            <button
+              className="lg:hidden text-gray-500 hover:text-gray-700"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Icons.menu size={20} />
+            </button>
             <div>
-              <h1 className="text-base font-semibold text-gray-900">{currentNav?.label || "Dashboard"}</h1>
+              <h1 className="text-base font-semibold text-gray-900">
+                {currentNav?.label || "Dashboard"}
+              </h1>
               <p className="text-xs text-gray-400">{COMPANY.name}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">{user?.email?.split('@')[0]}</p>
+              <p className="text-sm font-medium text-gray-900">
+                {user?.email?.split("@")[0]}
+              </p>
               <p className="text-xs text-gray-400">{user?.email}</p>
             </div>
             <button
@@ -520,7 +603,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{renderPage()}</main>
       </div>
     </div>

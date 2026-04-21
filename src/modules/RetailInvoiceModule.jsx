@@ -9,7 +9,6 @@ import {
   InvoiceCreator,
   RetailCustomerBillView,
   RetailCompanyBillView,
-  mergeRetailTransportDetails,
 } from "./BillingModule";
 
 const printHtmlInIframe = (html) => {
@@ -112,7 +111,6 @@ const printHtmlInIframe = (html) => {
   setTimeout(() => {
     iframe.contentWindow.focus();
     iframe.contentWindow.print();
-
     setTimeout(() => {
       document.body.removeChild(iframe);
     }, 1000);
@@ -127,12 +125,19 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
           <td>${item.name}</td>
           <td class="text-right">${item.qty}</td>
           <td class="text-right">${formatCurrency(item.rate)}</td>
-          <td class="text-right">${item.taxRate}%</td>
           <td class="text-right">${formatCurrency(item.amount)}</td>
         </tr>
       `
     )
     .join("");
+
+  const extraRows = `
+    ${invoice.overallTaxPercent > 0 ? `<div><strong>Tax (${invoice.overallTaxPercent}%):</strong> ${formatCurrency(invoice.totalTax)}</div>` : ""}
+    ${invoice.loadingCharge > 0 ? `<div><strong>Loading Charge:</strong> ${formatCurrency(invoice.loadingCharge)}</div>` : ""}
+    ${invoice.transportCharge > 0 ? `<div><strong>Transport Charge:</strong> ${formatCurrency(invoice.transportCharge)}</div>` : ""}
+    ${invoice.freightCharge > 0 ? `<div><strong>Freight Charge:</strong> ${formatCurrency(invoice.freightCharge)}</div>` : ""}
+    ${invoice.transportNotes ? `<div style="margin-top:8px;"><strong>Notes:</strong> ${invoice.transportNotes}</div>` : ""}
+  `;
 
   return `
     <div class="bill-wrap">
@@ -159,7 +164,6 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
             <th>Product</th>
             <th class="text-right">Qty</th>
             <th class="text-right">Rate</th>
-            <th class="text-right">Tax %</th>
             <th class="text-right">Amount</th>
           </tr>
         </thead>
@@ -167,6 +171,16 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
           ${rows}
         </tbody>
       </table>
+
+      ${
+        invoice.overallTaxPercent > 0 ||
+        invoice.loadingCharge > 0 ||
+        invoice.transportCharge > 0 ||
+        invoice.freightCharge > 0 ||
+        invoice.transportNotes
+          ? `<div style="padding:16px; border-top:1px solid #d1d5db; font-size:12px;">${extraRows}</div>`
+          : ""
+      }
 
       <div class="total-box">
         <strong>Total:</strong> ${formatCurrency(invoice.total)}
@@ -233,9 +247,7 @@ export const RetailInvoiceModule = ({
   const [showCustomerBill, setShowCustomerBill] = useState(null);
   const [showCompanyBill, setShowCompanyBill] = useState(null);
 
-  const retailInvoices = invoices
-  .filter((inv) => inv.invoiceType === "retail")
-  .map(mergeRetailTransportDetails);
+  const retailInvoices = invoices.filter((inv) => inv.invoiceType === "retail");
 
   return (
     <div>
@@ -262,7 +274,6 @@ export const RetailInvoiceModule = ({
             fixedInvoiceType="retail"
             showInvoiceTypeField={false}
             allowRateEdit={true}
-            allowTaxEdit={true}
             onInvoiceCreated={() => setTab("list")}
           />
         )}
@@ -278,24 +289,12 @@ export const RetailInvoiceModule = ({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">
-                        Invoice #
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">
-                        Date
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">
-                        Customer
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">
-                        Phone
-                      </th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">
-                        Actions
-                      </th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Invoice #</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Date</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Customer</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Phone</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">Total</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -304,31 +303,17 @@ export const RetailInvoiceModule = ({
 
                       return (
                         <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-mono font-medium">
-                            {inv.invoiceNo}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">
-                            {formatDate(inv.date)}
-                          </td>
+                          <td className="px-4 py-3 font-mono font-medium">{inv.invoiceNo}</td>
+                          <td className="px-4 py-3 text-gray-600">{formatDate(inv.date)}</td>
                           <td className="px-4 py-3">{customer?.name || "—"}</td>
                           <td className="px-4 py-3">{customer?.mobile || "—"}</td>
-                          <td className="px-4 py-3 text-right font-semibold">
-                            {formatCurrency(inv.total)}
-                          </td>
+                          <td className="px-4 py-3 text-right font-semibold">{formatCurrency(inv.total)}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setShowCustomerBill(inv)}
-                              >
+                              <Button size="sm" variant="ghost" onClick={() => setShowCustomerBill(inv)}>
                                 <Icons.file size={14} /> Customer Bill
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setShowCompanyBill(inv)}
-                              >
+                              <Button size="sm" variant="ghost" onClick={() => setShowCompanyBill(inv)}>
                                 <Icons.file size={14} /> Company Bill
                               </Button>
                             </div>
@@ -355,12 +340,8 @@ export const RetailInvoiceModule = ({
             <div className="flex justify-end">
               <Button
                 onClick={() => {
-                  const customer = customers.find(
-                    (c) => c.id === showCustomerBill.customerId
-                  );
-                  printHtmlInIframe(
-                    buildCustomerBillHTML(showCustomerBill, company, customer)
-                  );
+                  const customer = customers.find((c) => c.id === showCustomerBill.customerId);
+                  printHtmlInIframe(buildCustomerBillHTML(showCustomerBill, company, customer));
                 }}
               >
                 <Icons.printer size={14} /> Print / Save PDF
@@ -387,12 +368,8 @@ export const RetailInvoiceModule = ({
             <div className="flex justify-end">
               <Button
                 onClick={() => {
-                  const customer = customers.find(
-                    (c) => c.id === showCompanyBill.customerId
-                  );
-                  printHtmlInIframe(
-                    buildCompanyBillHTML(showCompanyBill, company, customer)
-                  );
+                  const customer = customers.find((c) => c.id === showCompanyBill.customerId);
+                  printHtmlInIframe(buildCompanyBillHTML(showCompanyBill, company, customer));
                 }}
               >
                 <Icons.printer size={14} /> Print / Save PDF

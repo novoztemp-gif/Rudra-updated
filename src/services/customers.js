@@ -4,6 +4,7 @@ const mapCustomer = (row) => ({
   id: row.id,
   name: row.name,
   mobile: row.mobile,
+  altMobile: row.alt_mobile || "",
   gstin: row.gstin,
   address: row.address,
   city: row.city,
@@ -25,6 +26,7 @@ const mapCustomer = (row) => ({
 const unmapCustomer = (obj) => ({
   name: obj.name,
   mobile: obj.mobile,
+  alt_mobile: obj.altMobile || null,
   gstin: obj.gstin,
   address: obj.address,
   city: obj.city,
@@ -36,7 +38,6 @@ const unmapCustomer = (obj) => ({
 });
 
 export async function getAll() {
-  // Get customers
   const { data: customers, error: custError } = await supabase
     .from('customers')
     .select('*')
@@ -45,14 +46,12 @@ export async function getAll() {
 
   if (custError) throw custError;
 
-  // Get all addresses
   const { data: addresses, error: addrError } = await supabase
     .from('customer_addresses')
     .select('*');
 
   if (addrError) throw addrError;
 
-  // Manual join: map addresses to customers
   const addressMap = {};
   addresses.forEach(addr => {
     if (!addressMap[addr.customer_id]) addressMap[addr.customer_id] = [];
@@ -74,7 +73,6 @@ export async function create(customer) {
 
   if (custError) throw custError;
 
-  // Insert addresses if provided
   if (customer.addresses && customer.addresses.length > 0) {
     const addrRecords = customer.addresses.map(addr => ({
       customer_id: custData.id,
@@ -94,7 +92,6 @@ export async function create(customer) {
 }
 
 export async function update(id, customer) {
-  // Skip update if id is not a valid UUID format
   if (!isValidUUID(id)) {
     console.warn(`Skipping invalid UUID: ${id}`);
     return customer;
@@ -109,12 +106,9 @@ export async function update(id, customer) {
 
   if (custError) throw custError;
 
-  // Update addresses if provided
   if (customer.addresses && customer.addresses.length > 0) {
-    // Delete old addresses
     await supabase.from('customer_addresses').delete().eq('customer_id', id);
 
-    // Insert new ones
     const addrRecords = customer.addresses.map(addr => ({
       customer_id: id,
       label: addr.label,

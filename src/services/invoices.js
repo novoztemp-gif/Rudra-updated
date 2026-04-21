@@ -9,12 +9,18 @@ const mapInvoice = (row) => ({
   date: row.date,
   deliveryNote: row.delivery_note,
   paymentTerms: row.payment_terms,
-  subtotal: row.subtotal,
-  cgst: row.cgst,
-  sgst: row.sgst,
-  igst: row.igst,
-  totalTax: row.total_tax,
-  total: row.total,
+  subtotal: Number(row.subtotal ?? 0),
+  cgst: Number(row.cgst ?? 0),
+  sgst: Number(row.sgst ?? 0),
+  igst: Number(row.igst ?? 0),
+  totalTax: Number(row.total_tax ?? 0),
+  total: Number(row.total ?? 0),
+  hasTransportDetails: row.has_transport_details ?? false,
+  loadingCharge: Number(row.loading_charge ?? 0),
+  transportCharge: Number(row.transport_charge ?? 0),
+  freightCharge: Number(row.freight_charge ?? 0),
+  transportNotes: row.transport_notes || "",
+  overallTaxPercent: Number(row.overall_tax_percent ?? 0),
   status: row.status,
   jsonConverted: row.json_converted,
   jsonSigned: row.json_signed,
@@ -23,17 +29,9 @@ const mapInvoice = (row) => ({
   ackDate: row.ack_date,
   signedInvoice: row.signed_invoice,
   signedQRCode: row.signed_qr_code,
-  //cancellation
-  //irnCancelJsonGenerated: row.irn_cancel_json_generated,
-  //irnCancelJson: row.irn_cancel_json,
-  //irnCancelReasonCode: row.irn_cancel_reason_code,
-  //irnCancelReasonText: row.irn_cancel_reason_text,
-  //irnCancelRequestedAt: row.irn_cancel_requested_at,
-  //
   ewayBillId: row.eway_bill_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
-  // Flatten eway_bill_details if present
   ...(row.eway_bill_details && {
     ewbGenerated: row.eway_bill_details.ewb_generated,
     ewbSigned: row.eway_bill_details.ewb_signed,
@@ -42,17 +40,16 @@ const mapInvoice = (row) => ({
     ewbValidTill: row.eway_bill_details.ewb_valid_till,
     ewbStatus: row.eway_bill_details.ewb_status,
   }),
-  // Rename invoice_items to items
-  items: (row.invoice_items || []).map(item => ({
+  items: (row.invoice_items || []).map((item) => ({
     id: item.id,
     productId: item.product_id,
     name: item.name,
     hsn: item.hsn,
     unit: item.unit,
-    qty: item.qty,
-    rate: item.rate,
-    taxRate: item.tax_rate,
-    amount: item.amount,
+    qty: Number(item.qty ?? 0),
+    rate: Number(item.rate ?? 0),
+    taxRate: Number(item.tax_rate ?? 0),
+    amount: Number(item.amount ?? 0),
   })),
 });
 
@@ -69,6 +66,12 @@ const unmapInvoice = (obj) => ({
   igst: obj.igst,
   total_tax: obj.totalTax,
   total: obj.total,
+  has_transport_details: obj.hasTransportDetails ?? false,
+  loading_charge: obj.loadingCharge ?? 0,
+  transport_charge: obj.transportCharge ?? 0,
+  freight_charge: obj.freightCharge ?? 0,
+  transport_notes: obj.transportNotes || "",
+  overall_tax_percent: obj.overallTaxPercent ?? 0,
   status: obj.status,
   json_converted: obj.jsonConverted ?? false,
   json_signed: obj.jsonSigned ?? false,
@@ -77,18 +80,10 @@ const unmapInvoice = (obj) => ({
   ack_date: obj.ackDate,
   signed_invoice: obj.signedInvoice,
   signed_qr_code: obj.signedQRCode,
-  //cancellation
-  //irn_cancel_json_generated: obj.irnCancelJsonGenerated ?? false,
-  //irn_cancel_json: obj.irnCancelJson,
-  //irn_cancel_reason_code: obj.irnCancelReasonCode,
-  //irn_cancel_reason_text: obj.irnCancelReasonText,
-  //irn_cancel_requested_at: obj.irnCancelRequestedAt,
-  //
   eway_bill_id: obj.ewayBillId,
 });
 
 export async function getAll() {
-  // Get invoices
   const { data: invoices, error: invError } = await supabase
     .from('invoices')
     .select('*')
@@ -96,41 +91,39 @@ export async function getAll() {
 
   if (invError) throw invError;
 
-  // Get all invoice items
   const { data: items, error: itemsError } = await supabase
     .from('invoice_items')
     .select('*');
 
   if (itemsError) throw itemsError;
 
-  // Get all eway bills
   const { data: ewayBills, error: ewayError } = await supabase
     .from('eway_bill_details')
     .select('*');
 
   if (ewayError) throw ewayError;
 
-  // Manual joins
   const itemsMap = {};
-  items.forEach(item => {
+  items.forEach((item) => {
     if (!itemsMap[item.invoice_id]) itemsMap[item.invoice_id] = [];
     itemsMap[item.invoice_id].push(item);
   });
 
   const ewayMap = {};
-  ewayBills.forEach(eway => {
+  ewayBills.forEach((eway) => {
     ewayMap[eway.invoice_id] = eway;
   });
 
-  return invoices.map(inv => mapInvoice({
-    ...inv,
-    invoice_items: itemsMap[inv.id] || [],
-    eway_bill_details: ewayMap[inv.id] || null
-  }));
+  return invoices.map((inv) =>
+    mapInvoice({
+      ...inv,
+      invoice_items: itemsMap[inv.id] || [],
+      eway_bill_details: ewayMap[inv.id] || null,
+    })
+  );
 }
 
 export async function create(invoice) {
-  // Step 1: Get next invoice number from companies table
   const { data: companyData, error: compError } = await supabase
     .from('companies')
     .select('id, invoice_seq')
@@ -142,16 +135,14 @@ export async function create(invoice) {
   const company = companyData[0];
   const invoiceNo = String(company.invoice_seq);
 
-  // Increment the sequence for next time
   await supabase
     .from('companies')
     .update({ invoice_seq: company.invoice_seq + 1 })
     .eq('id', company.id);
 
-  // Step 2: Insert invoice (without items)
   const invoiceToInsert = {
     ...unmapInvoice({ ...invoice, invoiceNo }),
-    created_by: null, // Set this if you have user context
+    created_by: null,
   };
 
   const { error: invError } = await supabase
@@ -160,18 +151,18 @@ export async function create(invoice) {
 
   if (invError) throw invError;
 
-  // Fetch the inserted invoice by invoice_no
   const { data: fetchedInvoices, error: fetchError } = await supabase
     .from('invoices')
     .select('*')
     .eq('invoice_no', invoiceNo);
 
   if (fetchError) throw fetchError;
-  if (!fetchedInvoices || fetchedInvoices.length === 0) throw new Error('Failed to fetch inserted invoice');
+  if (!fetchedInvoices || fetchedInvoices.length === 0) {
+    throw new Error('Failed to fetch inserted invoice');
+  }
 
   const newInvoice = fetchedInvoices[0];
 
-  // Step 3: Insert invoice items
   if (invoice.items && invoice.items.length > 0) {
     const itemsToInsert = invoice.items.map((item, idx) => ({
       invoice_id: newInvoice.id,
@@ -181,7 +172,7 @@ export async function create(invoice) {
       unit: item.unit,
       qty: item.qty,
       rate: item.rate,
-      tax_rate: item.taxRate,
+      tax_rate: item.taxRate ?? 0,
       amount: item.amount,
       sort_order: idx,
     }));
@@ -192,17 +183,15 @@ export async function create(invoice) {
 
     if (itemsError) throw itemsError;
 
-    // Step 4: Deduct stock for each product
     for (const item of invoice.items) {
       const products = await productsService.getAll();
-      const prod = products.find(p => p.id === item.productId);
+      const prod = products.find((p) => p.id === item.productId);
       if (prod) {
         await productsService.updateStock(item.productId, prod.stock - item.qty);
       }
     }
   }
 
-  // Fetch invoice items
   const { data: invoiceItems } = await supabase
     .from('invoice_items')
     .select('*')
@@ -211,7 +200,7 @@ export async function create(invoice) {
   return mapInvoice({
     ...newInvoice,
     invoice_items: invoiceItems || [],
-    eway_bill_details: null
+    eway_bill_details: null,
   });
 }
 
@@ -245,33 +234,29 @@ export async function updateIRN(id, irnData) {
   return mapInvoice({
     ...data,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null
+    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
   });
 }
 
 export async function saveEWBJSON(invoiceId, ewbJson) {
-  // Save just the generated JSON (before signing)
   const ewbRecord = {
     invoice_id: invoiceId,
     ewb_json: ewbJson,
     ewb_generated: true,
   };
 
-  // Check if record exists
   const { data: existing } = await supabase
     .from('eway_bill_details')
     .select('id')
     .eq('invoice_id', invoiceId);
 
   if (existing && existing.length > 0) {
-    // Update
     const { error } = await supabase
       .from('eway_bill_details')
       .update(ewbRecord)
       .eq('invoice_id', invoiceId);
     if (error) throw error;
   } else {
-    // Insert
     const { error } = await supabase
       .from('eway_bill_details')
       .insert([ewbRecord]);
@@ -280,7 +265,6 @@ export async function saveEWBJSON(invoiceId, ewbJson) {
 }
 
 export async function updateEWB(invoiceId, ewbData) {
-  // Upsert eway_bill_details with all fields
   const ewbRecord = {
     invoice_id: invoiceId,
     transporter_id: ewbData.transporterId,
@@ -300,28 +284,24 @@ export async function updateEWB(invoiceId, ewbData) {
     ewb_status: ewbData.ewbStatus,
   };
 
-  // Check if record exists
   const { data: existing } = await supabase
     .from('eway_bill_details')
     .select('id')
     .eq('invoice_id', invoiceId);
 
   if (existing && existing.length > 0) {
-    // Update
     const { error } = await supabase
       .from('eway_bill_details')
       .update(ewbRecord)
       .eq('invoice_id', invoiceId);
     if (error) throw error;
   } else {
-    // Insert
     const { error } = await supabase
       .from('eway_bill_details')
       .insert([ewbRecord]);
     if (error) throw error;
   }
 
-  // Update invoice.eway_bill_id with the EWB record id
   const { data: ewbData2 } = await supabase
     .from('eway_bill_details')
     .select('id')
@@ -334,7 +314,6 @@ export async function updateEWB(invoiceId, ewbData) {
       .eq('id', invoiceId);
   }
 
-  // Fetch and return updated invoice with manual joins
   const { data: updatedInv, error: fetchError } = await supabase
     .from('invoices')
     .select('*')
@@ -358,20 +337,31 @@ export async function updateEWB(invoiceId, ewbData) {
   return mapInvoice({
     ...inv,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null
+    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
   });
 }
 
 export async function update(id, changes) {
   const updateData = {};
 
-  // Map only the fields that are passed
   if ('invoiceNo' in changes) updateData.invoice_no = changes.invoiceNo;
   if ('customerId' in changes) updateData.customer_id = changes.customerId;
   if ('invoiceType' in changes) updateData.invoice_type = changes.invoiceType;
   if ('date' in changes) updateData.date = changes.date;
   if ('deliveryNote' in changes) updateData.delivery_note = changes.deliveryNote;
   if ('paymentTerms' in changes) updateData.payment_terms = changes.paymentTerms;
+  if ('subtotal' in changes) updateData.subtotal = changes.subtotal;
+  if ('cgst' in changes) updateData.cgst = changes.cgst;
+  if ('sgst' in changes) updateData.sgst = changes.sgst;
+  if ('igst' in changes) updateData.igst = changes.igst;
+  if ('totalTax' in changes) updateData.total_tax = changes.totalTax;
+  if ('total' in changes) updateData.total = changes.total;
+  if ('hasTransportDetails' in changes) updateData.has_transport_details = changes.hasTransportDetails;
+  if ('loadingCharge' in changes) updateData.loading_charge = changes.loadingCharge;
+  if ('transportCharge' in changes) updateData.transport_charge = changes.transportCharge;
+  if ('freightCharge' in changes) updateData.freight_charge = changes.freightCharge;
+  if ('transportNotes' in changes) updateData.transport_notes = changes.transportNotes;
+  if ('overallTaxPercent' in changes) updateData.overall_tax_percent = changes.overallTaxPercent;
   if ('status' in changes) updateData.status = changes.status;
   if ('jsonConverted' in changes) updateData.json_converted = changes.jsonConverted;
 
@@ -399,7 +389,7 @@ export async function update(id, changes) {
   return mapInvoice({
     ...updatedInv,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null
+    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
   });
 }
 
@@ -408,9 +398,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
 
   const decodeJWT = (token) => {
     const parts = token.split('.');
-    const decoded = parts[1]
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
+    const decoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const jsonStr = atob(decoded);
     return JSON.parse(jsonStr);
   };
@@ -457,7 +445,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
           ack_date: item.AckDt,
           signed_invoice: item.SignedInvoice,
           signed_qr_code: item.SignedQRCode,
-          json_signed: true
+          json_signed: true,
         })
         .eq('id', invoiceId);
 
@@ -469,7 +457,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
         ackNo: item.AckNo,
         ackDate: item.AckDt,
         signedInvoice: item.SignedInvoice,
-        signedQRCode: item.SignedQRCode
+        signedQRCode: item.SignedQRCode,
       });
     } catch (err) {
       results.failed.push({ item, error: err.message });

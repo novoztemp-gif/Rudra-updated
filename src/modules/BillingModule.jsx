@@ -2,7 +2,7 @@
 // BILLING SYSTEM + SHARED INVOICE CREATOR / PRINT VIEWS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { generateId, today } from "../utils/helpers";
 import {
   formatCurrency,
@@ -24,54 +24,6 @@ import { Icons } from "../components/ui/Icons";
 import { PartyForm } from "./CustomerModule";
 import { ProductForm } from "./InventoryModule";
 import * as invoicesService from "../services/invoices";
-
-
-const RETAIL_TRANSPORT_KEY = "retail_transport_demo_v1";
-
-const loadRetailTransportMap = () => {
-  try {
-    return JSON.parse(localStorage.getItem(RETAIL_TRANSPORT_KEY) || "{}");
-  } catch {
-    return {};
-  }
-};
-
-const saveRetailTransportMap = (map) => {
-  localStorage.setItem(RETAIL_TRANSPORT_KEY, JSON.stringify(map));
-};
-
-const saveRetailTransportForInvoice = (invoiceId, details) => {
-  const map = loadRetailTransportMap();
-
-  if (details?.hasTransportDetails) {
-    map[invoiceId] = {
-      hasTransportDetails: true,
-      loadingCharge: Number(details.loadingCharge || 0),
-      transportCharge: Number(details.transportCharge || 0),
-      freightCharge: Number(details.freightCharge || 0),
-      transportNotes: details.transportNotes || "",
-    };
-  } else {
-    delete map[invoiceId];
-  }
-
-  saveRetailTransportMap(map);
-};
-
-export const mergeRetailTransportDetails = (invoice) => {
-  const map = loadRetailTransportMap();
-  const details = map[invoice.id] || {};
-
-  return {
-    ...invoice,
-    hasTransportDetails: details.hasTransportDetails ?? false,
-    loadingCharge: Number(details.loadingCharge || 0),
-    transportCharge: Number(details.transportCharge || 0),
-    freightCharge: Number(details.freightCharge || 0),
-    transportNotes: details.transportNotes || "",
-  };
-};
-
 
 export const BillingModule = ({
   products,
@@ -116,6 +68,7 @@ export const BillingModule = ({
           />
         )}
       </div>
+
       <Modal
         open={!!showInvoice}
         onClose={() => setShowInvoice(null)}
@@ -128,6 +81,100 @@ export const BillingModule = ({
           customer={customers.find((c) => c.id === showInvoice?.customerId)}
         />
       </Modal>
+    </div>
+  );
+};
+
+const ProductSearchDropdown = ({
+  products,
+  productSearch,
+  setProductSearch,
+  selectedProductId,
+  onSelectProduct,
+}) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+
+    if (!q) return products.slice(0, 10);
+
+    return products.filter((p) => {
+      const name = p.name?.toLowerCase() || "";
+      const hsn = p.hsn?.toLowerCase() || "";
+      const category = p.category?.toLowerCase() || "";
+      return name.includes(q) || hsn.includes(q) || category.includes(q);
+    });
+  }, [products, productSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedProduct = products.find((p) => p.id === selectedProductId);
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <Input
+        label="Product"
+        value={productSearch}
+        onChange={(e) => {
+          setProductSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search by name, HSN, category..."
+      />
+
+      {selectedProduct && (
+        <div className="mt-1 text-xs text-gray-500">
+          Selected: {selectedProduct.name}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-44 overflow-y-auto">
+          {filteredProducts.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-gray-500">
+              No matching products
+            </div>
+          ) : (
+            filteredProducts.slice(0, 12).map((p) => {
+              const active = selectedProductId === p.id;
+
+              return (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => {
+                    onSelectProduct(p.id);
+                    setProductSearch(p.name || "");
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50 ${
+                    active ? "bg-gray-100" : ""
+                  }`}
+                >
+                  <div className="text-sm font-medium text-gray-900">
+                    {p.name}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    HSN: {p.hsn} | ₹{p.rate}/{p.unit} | Stock: {p.stock}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -145,7 +192,6 @@ export const InvoiceCreator = ({
   fixedInvoiceType = "tax",
   showInvoiceTypeField = false,
   allowRateEdit = true,
-  allowTaxEdit = true,
 }) => {
   const nextInvoiceNo =
     allInvoices.length > 0
@@ -153,26 +199,28 @@ export const InvoiceCreator = ({
       : 4960;
 
   const [form, setForm] = useState({
-  customerId: "",
-  invoiceType: fixedInvoiceType,
-  date: today(),
-  deliveryNote: "",
-  paymentTerms: "",
-  items: [],
-  hasTransportDetails: false,
-  loadingCharge: "",
-  transportCharge: "",
-  freightCharge: "",
-  transportNotes: "",
-});
+    customerId: "",
+    invoiceType: fixedInvoiceType,
+    date: today(),
+    deliveryNote: "",
+    paymentTerms: "",
+    items: [],
+    hasTransportDetails: false,
+    loadingCharge: "",
+    transportCharge: "",
+    freightCharge: "",
+    transportNotes: "",
+    overallTaxPercent: fixedInvoiceType === "retail" ? "18" : "",
+  });
 
   const [itemForm, setItemForm] = useState({
     productId: "",
     qty: "",
     rate: "",
-    taxRate: "",
   });
 
+  const [productSearch, setProductSearch] = useState("");
+  const [editOverallTax, setEditOverallTax] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -191,8 +239,8 @@ export const InvoiceCreator = ({
       ...prev,
       productId: newProduct.id,
       rate: String(newProduct.rate),
-      taxRate: String(newProduct.taxRate),
     }));
+    setProductSearch(newProduct.name || "");
     setShowAddProduct(false);
   };
 
@@ -207,7 +255,6 @@ export const InvoiceCreator = ({
       productId,
       qty: "",
       rate: product ? String(product.rate) : "",
-      taxRate: product ? String(product.taxRate) : "",
     });
   };
 
@@ -216,17 +263,16 @@ export const InvoiceCreator = ({
       !itemForm.productId ||
       !itemForm.qty ||
       parseFloat(itemForm.qty) <= 0 ||
-      itemForm.rate === "" ||
-      itemForm.taxRate === ""
-    )
+      itemForm.rate === ""
+    ) {
       return;
+    }
 
     const product = products.find((p) => p.id === itemForm.productId);
     if (!product) return;
 
     const qty = parseFloat(itemForm.qty);
     const rate = parseFloat(itemForm.rate);
-    const taxRate = parseFloat(itemForm.taxRate);
 
     if (qty > product.stock) {
       alert(`Insufficient stock. Available: ${product.stock} ${product.unit}`);
@@ -246,13 +292,18 @@ export const InvoiceCreator = ({
           qty,
           rate,
           unit: product.unit,
-          taxRate,
+          taxRate: 0,
           amount,
         },
       ],
     }));
 
-    setItemForm({ productId: "", qty: "", rate: "", taxRate: "" });
+    setItemForm({
+      productId: "",
+      qty: "",
+      rate: "",
+    });
+    setProductSearch("");
   };
 
   const removeItem = (idx) =>
@@ -262,7 +313,8 @@ export const InvoiceCreator = ({
     }));
 
   const subtotal = form.items.reduce((s, i) => s + i.amount, 0);
-  const totalTax = form.items.reduce((s, i) => s + (i.amount * i.taxRate) / 100, 0);
+  const overallTaxPercent = Number(form.overallTaxPercent || 0);
+  const totalTax = (subtotal * overallTaxPercent) / 100;
   const cgst = !isInterState ? totalTax / 2 : 0;
   const sgst = !isInterState ? totalTax / 2 : 0;
   const igst = isInterState ? totalTax : 0;
@@ -275,111 +327,120 @@ export const InvoiceCreator = ({
     ? loadingCharge + transportCharge + freightCharge
     : 0;
 
-const total = subtotal + totalTax + extraCharges;
+  const total = subtotal + totalTax + extraCharges;
 
   const saveInvoice = async () => {
-  if (!form.customerId || form.items.length === 0) {
-    alert("Select customer and add items");
-    return;
-  }
-
-  try {
-    const invData = {
-      customerId: form.customerId,
-      invoiceType: fixedInvoiceType,
-      date: form.date,
-      deliveryNote: form.deliveryNote,
-      paymentTerms: form.paymentTerms,
-      items: form.items,
-      subtotal,
-      cgst,
-      sgst,
-      igst,
-      totalTax,
-      total,
-      status: "active",
-      jsonConverted: false,
-    };
-
-    const createdInvoice = await invoicesService.create(invData);
-
-    const transportDetails = {
-      hasTransportDetails: form.hasTransportDetails,
-      loadingCharge,
-      transportCharge,
-      freightCharge,
-      transportNotes: form.transportNotes,
-    };
-
-    saveRetailTransportForInvoice(createdInvoice.id, transportDetails);
-
-    const qtyByProduct = {};
-    form.items.forEach((item) => {
-      qtyByProduct[item.productId] = (qtyByProduct[item.productId] || 0) + item.qty;
-    });
-
-    const updatedProducts = products.map((p) => {
-      if (!qtyByProduct[p.id]) return p;
-      return {
-        ...p,
-        stock: p.stock - qtyByProduct[p.id],
-        __skipSync: true,
-      };
-    });
-
-    setProducts(updatedProducts);
-
-    setInvoices((prev) => [
-      ...prev,
-      {
-        ...createdInvoice,
-        ...transportDetails,
-        __skipSync: true,
-      },
-    ]);
-
-    setForm({
-      customerId: "",
-      invoiceType: fixedInvoiceType,
-      date: today(),
-      deliveryNote: "",
-      paymentTerms: "",
-      items: [],
-      hasTransportDetails: false,
-      loadingCharge: "",
-      transportCharge: "",
-      freightCharge: "",
-      transportNotes: "",
-    });
-
-    alert(
-      `${fixedInvoiceType === "retail" ? "Retail Bill" : "Invoice"} #${createdInvoice.invoiceNo} created successfully!`
-    );
-
-    if (onInvoiceCreated) {
-      setTimeout(() => onInvoiceCreated(), 100);
+    if (!form.customerId || form.items.length === 0) {
+      alert("Select customer and add items");
+      return;
     }
-  } catch (err) {
-    alert(`Error creating invoice: ${err.message}`);
-  }
-};
+
+    try {
+      const invData = {
+        customerId: form.customerId,
+        invoiceType: fixedInvoiceType,
+        date: form.date,
+        deliveryNote: form.deliveryNote,
+        paymentTerms: form.paymentTerms,
+        items: form.items,
+        subtotal,
+        cgst,
+        sgst,
+        igst,
+        totalTax,
+        total,
+        hasTransportDetails: form.hasTransportDetails,
+        loadingCharge,
+        transportCharge,
+        freightCharge,
+        transportNotes: form.transportNotes,
+        overallTaxPercent,
+        status: "active",
+        jsonConverted: false,
+      };
+
+      const createdInvoice = await invoicesService.create(invData);
+
+      const qtyByProduct = {};
+      form.items.forEach((item) => {
+        qtyByProduct[item.productId] =
+          (qtyByProduct[item.productId] || 0) + item.qty;
+      });
+
+      const updatedProducts = products.map((p) => {
+        if (!qtyByProduct[p.id]) return p;
+        return {
+          ...p,
+          stock: p.stock - qtyByProduct[p.id],
+          __skipSync: true,
+        };
+      });
+
+      setProducts(updatedProducts);
+
+      setInvoices((prev) => [
+        ...prev,
+        {
+          ...createdInvoice,
+          __skipSync: true,
+        },
+      ]);
+
+      setForm({
+        customerId: "",
+        invoiceType: fixedInvoiceType,
+        date: today(),
+        deliveryNote: "",
+        paymentTerms: "",
+        items: [],
+        hasTransportDetails: false,
+        loadingCharge: "",
+        transportCharge: "",
+        freightCharge: "",
+        transportNotes: "",
+        overallTaxPercent: fixedInvoiceType === "retail" ? "18" : "",
+      });
+
+      setItemForm({
+        productId: "",
+        qty: "",
+        rate: "",
+      });
+
+      setProductSearch("");
+      setEditOverallTax(false);
+
+      alert(
+        `${
+          fixedInvoiceType === "retail" ? "Retail Bill" : "Invoice"
+        } #${createdInvoice.invoiceNo} created successfully!`
+      );
+
+      if (onInvoiceCreated) {
+        setTimeout(() => onInvoiceCreated(), 100);
+      }
+    } catch (err) {
+      alert(`Error creating invoice: ${err.message}`);
+    }
+  };
 
   const previewInvoice = {
-  invoiceNo: nextInvoiceNo,
-  ...form,
-  invoiceType: fixedInvoiceType,
-  subtotal,
-  cgst,
-  sgst,
-  igst,
-  totalTax,
-  total,
-  loadingCharge,
-  transportCharge,
-  freightCharge,
-  status: "preview",
-  jsonConverted: false,
-};
+    invoiceNo: nextInvoiceNo,
+    ...form,
+    invoiceType: fixedInvoiceType,
+    subtotal,
+    cgst,
+    sgst,
+    igst,
+    totalTax,
+    total,
+    loadingCharge,
+    transportCharge,
+    freightCharge,
+    overallTaxPercent,
+    status: "preview",
+    jsonConverted: false,
+  };
 
   return (
     <div className="space-y-4">
@@ -430,7 +491,9 @@ const total = subtotal + totalTax + extraCharges;
               label="Date"
               type="date"
               value={form.date}
-              onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, date: e.target.value }))
+              }
             />
             <Input
               label="Payment Terms"
@@ -446,112 +509,119 @@ const total = subtotal + totalTax + extraCharges;
             <div className="p-3 bg-gray-50 rounded-md text-xs">
               <span className="font-medium">{selectedCustomer.name}</span> —{" "}
               {selectedCustomer.address}
-              {selectedCustomer.gstin ? ` — GSTIN: ${selectedCustomer.gstin}` : ""}
-              {fixedInvoiceType === "tax" && (
-                <>
-                  {isInterState ? (
-                    <Badge variant="info" className="ml-2">
-                      Inter-State (IGST)
-                    </Badge>
-                  ) : (
-                    <Badge variant="success" className="ml-2">
-                      Intra-State (CGST+SGST)
-                    </Badge>
-                  )}
-                </>
-              )}
+              {selectedCustomer.gstin
+                ? ` — GSTIN: ${selectedCustomer.gstin}`
+                : ""}
             </div>
           )}
         </div>
 
         {fixedInvoiceType === "retail" && (
-  <div className="p-3 border rounded-md bg-gray-50">
-    <div className="flex items-center justify-between">
-      <div className="text-sm font-medium text-gray-800">
-        Optional Transport Details
-      </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() =>
-          setForm((prev) => ({
-            ...prev,
-            hasTransportDetails: !prev.hasTransportDetails,
-          }))
-        }
-      >
-        <Icons.truck size={14} />{" "}
-        {form.hasTransportDetails ? "Hide Transport Details" : "Add Transport Details"}
-      </Button>
-    </div>
+          <div className="p-3 border rounded-md bg-gray-50">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="text-sm font-medium text-gray-800">
+                Optional Transport Details
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    hasTransportDetails: !prev.hasTransportDetails,
+                  }))
+                }
+              >
+                <Icons.truck size={14} />{" "}
+                {form.hasTransportDetails
+                  ? "Hide Transport Details"
+                  : "Add Transport Details"}
+              </Button>
+            </div>
 
-    {form.hasTransportDetails && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-        <Input
-          label="Loading Charge"
-          type="number"
-          value={form.loadingCharge}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, loadingCharge: e.target.value }))
-          }
-          placeholder="0"
-        />
+            {form.hasTransportDetails && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                <Input
+                  label="Loading Charge"
+                  type="number"
+                  value={form.loadingCharge}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      loadingCharge: e.target.value,
+                    }))
+                  }
+                  placeholder="0"
+                />
 
-        <Input
-          label="Transport Charge"
-          type="number"
-          value={form.transportCharge}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, transportCharge: e.target.value }))
-          }
-          placeholder="0"
-        />
+                <Input
+                  label="Transport Charge"
+                  type="number"
+                  value={form.transportCharge}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      transportCharge: e.target.value,
+                    }))
+                  }
+                  placeholder="0"
+                />
 
-        <Input
-          label="Freight Charge"
-          type="number"
-          value={form.freightCharge}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, freightCharge: e.target.value }))
-          }
-          placeholder="0"
-        />
+                <Input
+                  label="Freight Charge"
+                  type="number"
+                  value={form.freightCharge}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      freightCharge: e.target.value,
+                    }))
+                  }
+                  placeholder="0"
+                />
 
-        <Input
-          label="Transport Notes"
-          value={form.transportNotes}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, transportNotes: e.target.value }))
-          }
-          placeholder="Optional notes"
-        />
-      </div>
-    )}
-  </div>
-)}
+                <Input
+                  label="Transport Notes"
+                  value={form.transportNotes}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      transportNotes: e.target.value,
+                    }))
+                  }
+                  placeholder="Optional notes"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       <Card title="Add Items">
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-start">
-            <div className="sm:col-span-2 lg:col-span-4">
-              <Select
-                label="Product"
-                options={products.map((p) => ({
-                  value: p.id,
-                  label: `${p.name} — ₹${p.rate}/${p.unit} (Stock: ${p.stock})`,
-                }))}
-                value={itemForm.productId}
-                onChange={(e) => handleProductChange(e.target.value)}
+            <div className="sm:col-span-2 lg:col-span-5">
+              <ProductSearchDropdown
+                products={products}
+                productSearch={productSearch}
+                setProductSearch={setProductSearch}
+                selectedProductId={itemForm.productId}
+                onSelectProduct={handleProductChange}
               />
-              <Button onClick={() => setShowAddProduct(true)} size="sm" className="mt-2 w-full">
+              <Button
+                onClick={() => setShowAddProduct(true)}
+                size="sm"
+                className="mt-2 w-full"
+              >
                 <Icons.plus size={14} /> Add Product
               </Button>
             </div>
 
             <div className="sm:col-span-1 lg:col-span-2">
               <Input
-                label={`Quantity ${selectedProduct ? `(${selectedProduct.unit})` : ""}`}
+                label={`Quantity ${
+                  selectedProduct ? `(${selectedProduct.unit})` : ""
+                }`}
                 type="number"
                 value={itemForm.qty}
                 onChange={(e) =>
@@ -574,27 +644,11 @@ const total = subtotal + totalTax + extraCharges;
               />
             </div>
 
-            <div className="sm:col-span-1 lg:col-span-2">
-              <Input
-                label="Tax %"
-                type="number"
-                value={itemForm.taxRate}
-                onChange={(e) =>
-                  setItemForm((prev) => ({ ...prev, taxRate: e.target.value }))
-                }
-                placeholder="0"
-                disabled={!allowTaxEdit}
-              />
-            </div>
-
-            <div className="sm:col-span-1 lg:col-span-2">
+            <div className="sm:col-span-1 lg:col-span-3">
               <Button
                 onClick={addItem}
                 disabled={
-                  !itemForm.productId ||
-                  !itemForm.qty ||
-                  itemForm.rate === "" ||
-                  itemForm.taxRate === ""
+                  !itemForm.productId || !itemForm.qty || itemForm.rate === ""
                 }
                 className="h-10 w-full mt-5"
               >
@@ -606,8 +660,8 @@ const total = subtotal + totalTax + extraCharges;
           {selectedProduct && (
             <div className="mt-2 text-xs text-gray-500">
               HSN: {selectedProduct.hsn} | Default Rate: ₹{selectedProduct.rate}/
-              {selectedProduct.unit} | Default Tax: {selectedProduct.taxRate}% |
-              Available: {selectedProduct.stock} {selectedProduct.unit}
+              {selectedProduct.unit} | Available: {selectedProduct.stock}{" "}
+              {selectedProduct.unit}
             </div>
           )}
         </div>
@@ -628,12 +682,6 @@ const total = subtotal + totalTax + extraCharges;
                 label: "Rate",
                 align: "right",
                 render: (r) => formatCurrency(r.rate),
-              },
-              {
-                key: "taxRate",
-                label: "Tax %",
-                align: "right",
-                render: (r) => `${r.taxRate}%`,
               },
               {
                 key: "amount",
@@ -668,25 +716,104 @@ const total = subtotal + totalTax + extraCharges;
                 <span className="tabular-nums">{formatCurrency(subtotal)}</span>
               </div>
 
-              {!isInterState ? (
-                <>
-                  <div className="flex justify-between w-full max-w-xs">
+              {!editOverallTax ? (
+                !isInterState ? (
+                  <>
+                    <div className="flex justify-between w-full max-w-xs">
+                      <span className="text-gray-500">
+                        CGST ({overallTaxPercent / 2}%):
+                      </span>
+                      <span className="tabular-nums">
+                        {formatCurrency(cgst)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between w-full max-w-xs items-center">
+                      <span className="text-gray-500">
+                        SGST ({overallTaxPercent / 2}%):
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums">
+                          {formatCurrency(sgst)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditOverallTax(true)}
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between w-full max-w-xs items-center">
                     <span className="text-gray-500">
-                      CGST ({form.items[0]?.taxRate / 2}%):
+                      IGST ({overallTaxPercent}%):
                     </span>
-                    <span className="tabular-nums">{formatCurrency(cgst)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums">
+                        {formatCurrency(igst)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditOverallTax(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex justify-between w-full max-w-xs">
-                    <span className="text-gray-500">
-                      SGST ({form.items[0]?.taxRate / 2}%):
-                    </span>
-                    <span className="tabular-nums">{formatCurrency(sgst)}</span>
-                  </div>
-                </>
+                )
               ) : (
+                <div className="flex justify-between w-full max-w-xs items-center">
+                  <span className="text-gray-500">Tax %:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={form.overallTaxPercent}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          overallTaxPercent: e.target.value,
+                        }))
+                      }
+                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditOverallTax(false)}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {form.hasTransportDetails && loadingCharge > 0 && (
                 <div className="flex justify-between w-full max-w-xs">
-                  <span className="text-gray-500">IGST ({form.items[0]?.taxRate}%):</span>
-                  <span className="tabular-nums">{formatCurrency(igst)}</span>
+                  <span className="text-gray-500">Loading Charge:</span>
+                  <span className="tabular-nums">
+                    {formatCurrency(loadingCharge)}
+                  </span>
+                </div>
+              )}
+
+              {form.hasTransportDetails && transportCharge > 0 && (
+                <div className="flex justify-between w-full max-w-xs">
+                  <span className="text-gray-500">Transport Charge:</span>
+                  <span className="tabular-nums">
+                    {formatCurrency(transportCharge)}
+                  </span>
+                </div>
+              )}
+
+              {form.hasTransportDetails && freightCharge > 0 && (
+                <div className="flex justify-between w-full max-w-xs">
+                  <span className="text-gray-500">Freight Charge:</span>
+                  <span className="tabular-nums">
+                    {formatCurrency(freightCharge)}
+                  </span>
                 </div>
               )}
 
@@ -805,7 +932,9 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices }) => {
           );
 
           alert(
-            `Invoice #${invoices.find((i) => i.id === invoiceId)?.invoiceNo} updated with IRN`
+            `Invoice #${
+              invoices.find((i) => i.id === invoiceId)?.invoiceNo
+            } updated with IRN`
           );
         } catch (err) {
           alert(`Invalid JSON: ${err.message}`);
@@ -819,26 +948,37 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices }) => {
   return (
     <Card
       title="Invoices"
-      actions={<SearchBar value={search} onChange={setSearch} placeholder="Search invoice..." />}
+      actions={
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search invoice..."
+        />
+      }
     >
       <Table
         columns={[
           {
             key: "invoiceNo",
             label: "Invoice #",
-            render: (r) => <span className="font-mono font-medium">{r.invoiceNo}</span>,
+            render: (r) => (
+              <span className="font-mono font-medium">{r.invoiceNo}</span>
+            ),
           },
           { key: "date", label: "Date", render: (r) => formatDate(r.date) },
           {
             key: "customer",
             label: "Customer",
-            render: (r) => customers.find((c) => c.id === r.customerId)?.name || "—",
+            render: (r) =>
+              customers.find((c) => c.id === r.customerId)?.name || "—",
           },
           {
             key: "total",
             label: "Total",
             align: "right",
-            render: (r) => <span className="font-semibold">{formatCurrency(r.total)}</span>,
+            render: (r) => (
+              <span className="font-semibold">{formatCurrency(r.total)}</span>
+            ),
           },
           {
             key: "irn",
@@ -996,8 +1136,9 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
             <div>{consignee?.address}</div>
             <div>GSTIN/UIN : {consignee?.gstin}</div>
             <div>
-              State Name : {STATES.find((s) => s.code === consignee?.state)?.name},
-              Code : {consignee?.state}
+              State Name :{" "}
+              {STATES.find((s) => s.code === consignee?.state)?.name}, Code :{" "}
+              {consignee?.state}
             </div>
           </div>
           <div className="grid grid-cols-2">
@@ -1022,25 +1163,35 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
           <div>{buyer?.address}</div>
           <div>GSTIN/UIN : {buyer?.gstin}</div>
           <div>
-            State Name : {STATES.find((s) => s.code === buyer?.state)?.name}, Code :{" "}
-            {buyer?.state}
+            State Name : {STATES.find((s) => s.code === buyer?.state)?.name},
+            Code : {buyer?.state}
           </div>
         </div>
 
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-gray-800 bg-gray-50">
-              <th className="border-r border-gray-800 p-1.5 text-left w-8">SI No.</th>
+              <th className="border-r border-gray-800 p-1.5 text-left w-8">
+                SI No.
+              </th>
               <th className="border-r border-gray-800 p-1.5 text-left">
                 Description of Goods
               </th>
-              <th className="border-r border-gray-800 p-1.5 text-center">HSN/SAC</th>
-              <th className="border-r border-gray-800 p-1.5 text-right">Quantity</th>
+              <th className="border-r border-gray-800 p-1.5 text-center">
+                HSN/SAC
+              </th>
+              <th className="border-r border-gray-800 p-1.5 text-right">
+                Quantity
+              </th>
               <th className="border-r border-gray-800 p-1.5 text-right">
                 Rate (Incl. Tax)
               </th>
-              <th className="border-r border-gray-800 p-1.5 text-right">Rate</th>
-              <th className="border-r border-gray-800 p-1.5 text-center">per</th>
+              <th className="border-r border-gray-800 p-1.5 text-right">
+                Rate
+              </th>
+              <th className="border-r border-gray-800 p-1.5 text-center">
+                per
+              </th>
               <th className="p-1.5 text-right">Amount</th>
             </tr>
           </thead>
@@ -1048,8 +1199,12 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
             {invoice.items.map((item, idx) => (
               <tr key={idx} className="border-b border-gray-800">
                 <td className="border-r border-gray-800 p-1.5">{idx + 1}</td>
-                <td className="border-r border-gray-800 p-1.5 font-bold">{item.name}</td>
-                <td className="border-r border-gray-800 p-1.5 text-center">{item.hsn}</td>
+                <td className="border-r border-gray-800 p-1.5 font-bold">
+                  {item.name}
+                </td>
+                <td className="border-r border-gray-800 p-1.5 text-center">
+                  {item.hsn}
+                </td>
                 <td className="border-r border-gray-800 p-1.5 text-right">
                   {item.qty.toFixed(2)} {item.unit}
                 </td>
@@ -1072,7 +1227,10 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               <>
                 <tr className="border-b border-gray-800">
                   <td className="border-r border-gray-800 p-1.5" />
-                  <td className="border-r border-gray-800 p-1.5 text-right font-bold" colSpan={5}>
+                  <td
+                    className="border-r border-gray-800 p-1.5 text-right font-bold"
+                    colSpan={5}
+                  >
                     CGST
                   </td>
                   <td className="border-r border-gray-800 p-1.5 text-right">
@@ -1084,7 +1242,10 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
                 </tr>
                 <tr className="border-b border-gray-800">
                   <td className="border-r border-gray-800 p-1.5" />
-                  <td className="border-r border-gray-800 p-1.5 text-right font-bold" colSpan={5}>
+                  <td
+                    className="border-r border-gray-800 p-1.5 text-right font-bold"
+                    colSpan={5}
+                  >
                     SGST
                   </td>
                   <td className="border-r border-gray-800 p-1.5 text-right">
@@ -1098,7 +1259,10 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
             ) : (
               <tr className="border-b border-gray-800">
                 <td className="border-r border-gray-800 p-1.5" />
-                <td className="border-r border-gray-800 p-1.5 text-right font-bold" colSpan={5}>
+                <td
+                  className="border-r border-gray-800 p-1.5 text-right font-bold"
+                  colSpan={5}
+                >
                   IGST
                 </td>
                 <td className="border-r border-gray-800 p-1.5 text-right">
@@ -1113,7 +1277,10 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
           <tfoot>
             <tr className="border-t-2 border-gray-800">
               <td className="border-r border-gray-800 p-2" />
-              <td className="border-r border-gray-800 p-2 text-right font-bold" colSpan={2}>
+              <td
+                className="border-r border-gray-800 p-2 text-right font-bold"
+                colSpan={2}
+              >
                 Total
               </td>
               <td className="border-r border-gray-800 p-2 text-right font-bold">
@@ -1144,15 +1311,24 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
                 </th>
                 {!isInterState ? (
                   <>
-                    <th className="border-r border-gray-800 p-1.5 text-center" colSpan={2}>
+                    <th
+                      className="border-r border-gray-800 p-1.5 text-center"
+                      colSpan={2}
+                    >
                       Central Tax
                     </th>
-                    <th className="border-r border-gray-800 p-1.5 text-center" colSpan={2}>
+                    <th
+                      className="border-r border-gray-800 p-1.5 text-center"
+                      colSpan={2}
+                    >
                       State Tax
                     </th>
                   </>
                 ) : (
-                  <th className="border-r border-gray-800 p-1.5 text-center" colSpan={2}>
+                  <th
+                    className="border-r border-gray-800 p-1.5 text-center"
+                    colSpan={2}
+                  >
                     Integrated Tax
                   </th>
                 )}
@@ -1161,7 +1337,9 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
             </thead>
             <tbody>
               <tr className="border-b border-gray-800">
-                <td className="border-r border-gray-800 p-1.5">{invoice.items[0]?.hsn}</td>
+                <td className="border-r border-gray-800 p-1.5">
+                  {invoice.items[0]?.hsn}
+                </td>
                 <td className="border-r border-gray-800 p-1.5 text-right">
                   {formatCurrency(taxableValue)}
                 </td>
@@ -1224,6 +1402,12 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
 export const RetailCustomerBillView = ({ invoice, company, customer }) => {
   if (!invoice) return null;
 
+  const isInterState = customer?.state !== company.stateCode;
+  const overallTaxPercent = Number(invoice.overallTaxPercent || 0);
+  const totalTax = Number(invoice.totalTax || 0);
+  const cgst = !isInterState ? totalTax / 2 : 0;
+  const sgst = !isInterState ? totalTax / 2 : 0;
+  const igst = isInterState ? totalTax : 0;
   const loadingCharge = Number(invoice.loadingCharge || 0);
   const transportCharge = Number(invoice.transportCharge || 0);
   const freightCharge = Number(invoice.freightCharge || 0);
@@ -1239,12 +1423,20 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
 
         <div className="p-4 grid grid-cols-2 gap-4 text-xs border-b">
           <div>
-            <div><strong>Invoice No:</strong> {invoice.invoiceNo}</div>
-            <div><strong>Date:</strong> {formatDate(invoice.date)}</div>
+            <div>
+              <strong>Invoice No:</strong> {invoice.invoiceNo}
+            </div>
+            <div>
+              <strong>Date:</strong> {formatDate(invoice.date)}
+            </div>
           </div>
           <div>
-            <div><strong>Customer:</strong> {customer?.name || "—"}</div>
-            <div><strong>Phone:</strong> {customer?.mobile || "—"}</div>
+            <div>
+              <strong>Customer:</strong> {customer?.name || "—"}
+            </div>
+            <div>
+              <strong>Phone:</strong> {customer?.mobile || "—"}
+            </div>
           </div>
         </div>
 
@@ -1254,7 +1446,6 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
               <th className="px-3 py-2 text-left">Product</th>
               <th className="px-3 py-2 text-right">Qty</th>
               <th className="px-3 py-2 text-right">Rate</th>
-              <th className="px-3 py-2 text-right">Tax %</th>
               <th className="px-3 py-2 text-right">Amount</th>
             </tr>
           </thead>
@@ -1263,16 +1454,41 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
               <tr key={idx} className="border-b">
                 <td className="px-3 py-2">{item.name}</td>
                 <td className="px-3 py-2 text-right">{item.qty}</td>
-                <td className="px-3 py-2 text-right">{formatCurrency(item.rate)}</td>
-                <td className="px-3 py-2 text-right">{item.taxRate}%</td>
-                <td className="px-3 py-2 text-right">{formatCurrency(item.amount)}</td>
+                <td className="px-3 py-2 text-right">
+                  {formatCurrency(item.rate)}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {formatCurrency(item.amount)}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {(loadingCharge > 0 || transportCharge > 0 || freightCharge > 0) && (
+        {(overallTaxPercent > 0 ||
+          loadingCharge > 0 ||
+          transportCharge > 0 ||
+          freightCharge > 0 ||
+          invoice.transportNotes) && (
           <div className="p-4 border-t text-xs space-y-1">
+            {!isInterState ? (
+              <>
+                <div className="flex justify-between">
+                  <span>CGST ({overallTaxPercent / 2}%)</span>
+                  <span>{formatCurrency(cgst)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>SGST ({overallTaxPercent / 2}%)</span>
+                  <span>{formatCurrency(sgst)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between">
+                <span>IGST ({overallTaxPercent}%)</span>
+                <span>{formatCurrency(igst)}</span>
+              </div>
+            )}
+
             {loadingCharge > 0 && (
               <div className="flex justify-between">
                 <span>Loading Charge</span>
