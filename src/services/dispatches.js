@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 const mapDispatch = (row) => ({
   id: row.id,
@@ -22,26 +22,23 @@ const unmapDispatch = (obj) => ({
   destination: obj.destination,
   delivery_terms: obj.deliveryTerms,
   transport_details: obj.transportDetails,
-  status: obj.status,
+  status: obj.status ?? "dispatched",
 });
 
 export async function getAll() {
   const { data, error } = await supabase
-    .from('dispatches')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from("dispatches")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data.map(mapDispatch);
+  return (data || []).map(mapDispatch);
 }
 
 export async function create(dispatch) {
   const { data, error } = await supabase
-    .from('dispatches')
-    .insert([{
-      ...unmapDispatch(dispatch),
-      created_by: null, // Set if you have user context
-    }])
+    .from("dispatches")
+    .insert([unmapDispatch(dispatch)])
     .select()
     .single();
 
@@ -49,11 +46,22 @@ export async function create(dispatch) {
   return mapDispatch(data);
 }
 
-export async function updateStatus(id, status) {
+export async function update(id, changes) {
+  const updateData = {};
+
+  if ("dispatchNo" in changes) updateData.dispatch_no = changes.dispatchNo;
+  if ("invoiceId" in changes) updateData.invoice_id = changes.invoiceId;
+  if ("invoiceNo" in changes) updateData.invoice_no = changes.invoiceNo;
+  if ("vehicleNo" in changes) updateData.vehicle_no = changes.vehicleNo;
+  if ("destination" in changes) updateData.destination = changes.destination;
+  if ("deliveryTerms" in changes) updateData.delivery_terms = changes.deliveryTerms;
+  if ("transportDetails" in changes) updateData.transport_details = changes.transportDetails;
+  if ("status" in changes) updateData.status = changes.status;
+
   const { data, error } = await supabase
-    .from('dispatches')
-    .update({ status })
-    .eq('id', id)
+    .from("dispatches")
+    .update(updateData)
+    .eq("id", id)
     .select()
     .single();
 
@@ -63,9 +71,9 @@ export async function updateStatus(id, status) {
 
 export async function delete_(id) {
   const { error } = await supabase
-    .from('dispatches')
+    .from("dispatches")
     .delete()
-    .eq('id', id);
+    .eq("id", id);
 
   if (error) throw error;
 }

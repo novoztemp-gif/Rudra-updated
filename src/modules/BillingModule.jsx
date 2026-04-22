@@ -33,6 +33,7 @@ export const BillingModule = ({
   invoices,
   setInvoices,
   company,
+  showToast,
 }) => {
   const [tab, setTab] = useState("create");
   const [showInvoice, setShowInvoice] = useState(null);
@@ -58,6 +59,7 @@ export const BillingModule = ({
             allInvoices={invoices}
             setInvoices={setInvoices}
             company={company}
+            showToast={showToast}
           />
         ) : (
           <InvoiceList
@@ -65,6 +67,7 @@ export const BillingModule = ({
             customers={customers}
             onView={setShowInvoice}
             setInvoices={setInvoices}
+            showToast={showToast}
           />
         )}
       </div>
@@ -141,13 +144,13 @@ const ProductSearchDropdown = ({
       )}
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-44 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-36 overflow-y-auto">
           {filteredProducts.length === 0 ? (
             <div className="px-3 py-3 text-sm text-gray-500">
               No matching products
             </div>
           ) : (
-            filteredProducts.slice(0, 12).map((p) => {
+            filteredProducts.slice(0, 10).map((p) => {
               const active = selectedProductId === p.id;
 
               return (
@@ -192,6 +195,7 @@ export const InvoiceCreator = ({
   fixedInvoiceType = "tax",
   showInvoiceTypeField = false,
   allowRateEdit = true,
+  showToast,
 }) => {
   const nextInvoiceNo =
     allInvoices.length > 0
@@ -225,11 +229,21 @@ export const InvoiceCreator = ({
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
 
+  const taxInputRef = useRef(null);
+
+  useEffect(() => {
+    if (editOverallTax && taxInputRef.current) {
+      taxInputRef.current.focus();
+      taxInputRef.current.select();
+    }
+  }, [editOverallTax]);
+
   const handleSaveCustomer = (entity) => {
     const newCustomer = { ...entity, id: generateId() };
     setCustomers((prev) => [...prev, newCustomer]);
     setForm((prev) => ({ ...prev, customerId: newCustomer.id }));
     setShowAddCustomer(false);
+    showToast?.("Customer added successfully", "success");
   };
 
   const handleSaveProduct = (entity) => {
@@ -242,6 +256,7 @@ export const InvoiceCreator = ({
     }));
     setProductSearch(newProduct.name || "");
     setShowAddProduct(false);
+    showToast?.("Product added successfully", "success");
   };
 
   const selectedProduct = products.find((p) => p.id === itemForm.productId);
@@ -258,6 +273,33 @@ export const InvoiceCreator = ({
     });
   };
 
+  const handleQtyChange = (value) => {
+    if (value === "") {
+      setItemForm((prev) => ({ ...prev, qty: "" }));
+      return;
+    }
+    const num = Math.max(0, Number(value));
+    setItemForm((prev) => ({ ...prev, qty: String(num) }));
+  };
+
+  const handleRateChange = (value) => {
+    if (value === "") {
+      setItemForm((prev) => ({ ...prev, rate: "" }));
+      return;
+    }
+    const num = Math.max(0, Number(value));
+    setItemForm((prev) => ({ ...prev, rate: String(num) }));
+  };
+
+  const saveTaxEdit = () => {
+    const safeTax = Math.max(0, Number(form.overallTaxPercent || 0));
+    setForm((prev) => ({
+      ...prev,
+      overallTaxPercent: String(safeTax),
+    }));
+    setEditOverallTax(false);
+  };
+
   const addItem = () => {
     if (
       !itemForm.productId ||
@@ -265,17 +307,21 @@ export const InvoiceCreator = ({
       parseFloat(itemForm.qty) <= 0 ||
       itemForm.rate === ""
     ) {
+      showToast?.("Select product and enter valid quantity and rate", "warning");
       return;
     }
 
     const product = products.find((p) => p.id === itemForm.productId);
     if (!product) return;
 
-    const qty = parseFloat(itemForm.qty);
-    const rate = parseFloat(itemForm.rate);
+    const qty = Math.max(0, parseFloat(itemForm.qty));
+    const rate = Math.max(0, parseFloat(itemForm.rate));
 
     if (qty > product.stock) {
-      alert(`Insufficient stock. Available: ${product.stock} ${product.unit}`);
+      showToast?.(
+        `Insufficient stock. Available: ${product.stock} ${product.unit}`,
+        "error"
+      );
       return;
     }
 
@@ -319,9 +365,9 @@ export const InvoiceCreator = ({
   const sgst = !isInterState ? totalTax / 2 : 0;
   const igst = isInterState ? totalTax : 0;
 
-  const loadingCharge = Number(form.loadingCharge || 0);
-  const transportCharge = Number(form.transportCharge || 0);
-  const freightCharge = Number(form.freightCharge || 0);
+  const loadingCharge = Math.max(0, Number(form.loadingCharge || 0));
+  const transportCharge = Math.max(0, Number(form.transportCharge || 0));
+  const freightCharge = Math.max(0, Number(form.freightCharge || 0));
 
   const extraCharges = form.hasTransportDetails
     ? loadingCharge + transportCharge + freightCharge
@@ -331,7 +377,7 @@ export const InvoiceCreator = ({
 
   const saveInvoice = async () => {
     if (!form.customerId || form.items.length === 0) {
-      alert("Select customer and add items");
+      showToast?.("Select customer and add items", "warning");
       return;
     }
 
@@ -378,13 +424,12 @@ export const InvoiceCreator = ({
 
       setProducts(updatedProducts);
 
-      setInvoices((prev) => [
-        ...prev,
-        {
-          ...createdInvoice,
-          __skipSync: true,
-        },
-      ]);
+      const newInvoiceForState = {
+        ...createdInvoice,
+        __skipSync: true,
+      };
+
+      setInvoices((prev) => [newInvoiceForState, ...prev]);
 
       setForm({
         customerId: "",
@@ -410,17 +455,18 @@ export const InvoiceCreator = ({
       setProductSearch("");
       setEditOverallTax(false);
 
-      alert(
+      showToast?.(
         `${
           fixedInvoiceType === "retail" ? "Retail Bill" : "Invoice"
-        } #${createdInvoice.invoiceNo} created successfully!`
+        } #${createdInvoice.invoiceNo} created successfully`,
+        "success"
       );
 
       if (onInvoiceCreated) {
-        setTimeout(() => onInvoiceCreated(), 100);
+        onInvoiceCreated();
       }
     } catch (err) {
-      alert(`Error creating invoice: ${err.message}`);
+      showToast?.(`Error creating invoice: ${err.message}`, "error");
     }
   };
 
@@ -544,11 +590,12 @@ export const InvoiceCreator = ({
                 <Input
                   label="Loading Charge"
                   type="number"
+                  min="0"
                   value={form.loadingCharge}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      loadingCharge: e.target.value,
+                      loadingCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -557,11 +604,12 @@ export const InvoiceCreator = ({
                 <Input
                   label="Transport Charge"
                   type="number"
+                  min="0"
                   value={form.transportCharge}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      transportCharge: e.target.value,
+                      transportCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -570,11 +618,12 @@ export const InvoiceCreator = ({
                 <Input
                   label="Freight Charge"
                   type="number"
+                  min="0"
                   value={form.freightCharge}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      freightCharge: e.target.value,
+                      freightCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -623,10 +672,9 @@ export const InvoiceCreator = ({
                   selectedProduct ? `(${selectedProduct.unit})` : ""
                 }`}
                 type="number"
+                min="0"
                 value={itemForm.qty}
-                onChange={(e) =>
-                  setItemForm((prev) => ({ ...prev, qty: e.target.value }))
-                }
+                onChange={(e) => handleQtyChange(e.target.value)}
                 placeholder="0"
               />
             </div>
@@ -635,10 +683,9 @@ export const InvoiceCreator = ({
               <Input
                 label="Rate"
                 type="number"
+                min="0"
                 value={itemForm.rate}
-                onChange={(e) =>
-                  setItemForm((prev) => ({ ...prev, rate: e.target.value }))
-                }
+                onChange={(e) => handleRateChange(e.target.value)}
                 placeholder="0"
                 disabled={!allowRateEdit}
               />
@@ -732,9 +779,6 @@ export const InvoiceCreator = ({
                         SGST ({overallTaxPercent / 2}%):
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="tabular-nums">
-                          {formatCurrency(sgst)}
-                        </span>
                         <button
                           type="button"
                           onClick={() => setEditOverallTax(true)}
@@ -742,6 +786,9 @@ export const InvoiceCreator = ({
                         >
                           Edit
                         </button>
+                        <span className="tabular-nums">
+                          {formatCurrency(sgst)}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -751,9 +798,6 @@ export const InvoiceCreator = ({
                       IGST ({overallTaxPercent}%):
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="tabular-nums">
-                        {formatCurrency(igst)}
-                      </span>
                       <button
                         type="button"
                         onClick={() => setEditOverallTax(true)}
@@ -761,6 +805,9 @@ export const InvoiceCreator = ({
                       >
                         Edit
                       </button>
+                      <span className="tabular-nums">
+                        {formatCurrency(igst)}
+                      </span>
                     </div>
                   </div>
                 )
@@ -769,19 +816,30 @@ export const InvoiceCreator = ({
                   <span className="text-gray-500">Tax %:</span>
                   <div className="flex items-center gap-2">
                     <input
+                      ref={taxInputRef}
                       type="number"
+                      min="0"
                       value={form.overallTaxPercent}
                       onChange={(e) =>
                         setForm((prev) => ({
                           ...prev,
-                          overallTaxPercent: e.target.value,
+                          overallTaxPercent:
+                            e.target.value === ""
+                              ? ""
+                              : String(Math.max(0, Number(e.target.value))),
                         }))
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          saveTaxEdit();
+                        }
+                      }}
                       className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md"
                     />
                     <button
                       type="button"
-                      onClick={() => setEditOverallTax(false)}
+                      onClick={saveTaxEdit}
                       className="text-xs text-blue-600 hover:text-blue-800"
                     >
                       Save
@@ -883,7 +941,7 @@ export const InvoiceCreator = ({
   );
 };
 
-const InvoiceList = ({ invoices, customers, onView, setInvoices }) => {
+const InvoiceList = ({ invoices, customers, onView, setInvoices, showToast }) => {
   const [search, setSearch] = useState("");
   const filtered = invoices.filter((inv) => {
     const cust = customers.find((c) => c.id === inv.customerId);
@@ -908,7 +966,7 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices }) => {
           const response = Array.isArray(data) ? data[0] : data;
 
           if (!response.Irn) {
-            alert("Invalid response: Missing IRN field");
+            showToast?.("Invalid response: Missing IRN field", "error");
             return;
           }
 
@@ -931,13 +989,12 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices }) => {
             )
           );
 
-          alert(
-            `Invoice #${
-              invoices.find((i) => i.id === invoiceId)?.invoiceNo
-            } updated with IRN`
+          showToast?.(
+            `Invoice #${invoices.find((i) => i.id === invoiceId)?.invoiceNo} updated with IRN`,
+            "success"
           );
         } catch (err) {
-          alert(`Invalid JSON: ${err.message}`);
+          showToast?.(`Invalid JSON: ${err.message}`, "error");
         }
       };
       reader.readAsText(file);

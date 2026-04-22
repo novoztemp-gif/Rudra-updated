@@ -12,12 +12,13 @@ import * as suppliersService from "./services/suppliers";
 import * as transportersService from "./services/transporters";
 import * as invoicesService from "./services/invoices";
 import * as purchasesService from "./services/purchases";
-
+import * as dispatchesService from "./services/dispatches";
 // Pages
 import { LoginPage } from "./pages/LoginPage";
 
 // UI
 import { Icons } from "./components/ui/Icons";
+import { Toast } from "./components/ui/Toast";
 
 // Modules
 import { Dashboard } from "./modules/DashBoard";
@@ -27,7 +28,7 @@ import { ReportsModule } from "./modules/ReportsModule";
 import { PurchaseModule } from "./modules/PurchaseModule";
 import { InventoryModule } from "./modules/InventoryModule";
 import { RetailInvoiceModule } from "./modules/RetailInvoiceModule";
-
+import { DispatchModule } from "./modules/DispatchModule";
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP LAYOUT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { key: "inventory", label: "Inventory", icon: Icons.box },
   { key: "purchase", label: "Purchase", icon: Icons.cart },
   { key: "customers", label: "Parties", icon: Icons.users },
+  { key: "dispatch", label: "Dispatch", icon: Icons.truck },
   { key: "transporters", label: "Transporters", icon: Icons.truck },
   { key: "reports", label: "Reports", icon: Icons.chart },
 ];
@@ -60,6 +62,14 @@ export default function App() {
   const [invoices, _setInvoices] = useState([]);
   const [purchases, _setPurchases] = useState([]);
   const [_gspConfig, _setGspConfig] = useState(null);
+  const [dispatches, _setDispatches] = useState([]);
+
+  //toast state
+  const [toast, setToast] = useState({
+    open: false,
+    message: "",
+    type: "info",
+  });
 
   // Check authentication on mount
   useEffect(() => {
@@ -98,13 +108,14 @@ export default function App() {
 
     const loadData = async () => {
       try {
-        const [prods, custs, supps, trans, invs, purs] = await Promise.all([
+        const [prods, custs, supps, trans, invs, purs, disps] = await Promise.all([
           productsService.getAll(),
           customersService.getAll(),
           suppliersService.getAll(),
           transportersService.getAll(),
           invoicesService.getAll(),
           purchasesService.getAll(),
+          dispatchesService.getAll(),
         ]);
 
         _setProducts(prods);
@@ -112,6 +123,7 @@ export default function App() {
         _setSuppliers(supps);
         _setTransporters(trans);
         _setInvoices(invs);
+        _setDispatches(disps);
         _setPurchases(purs);
         _setGspConfig({
           apiKey: "",
@@ -314,6 +326,37 @@ export default function App() {
     _setInvoices(next);
   };
 
+  const setDispatches = async (updater) => {
+    const prev = dispatches;
+    const next = typeof updater === "function" ? updater(prev) : updater;
+
+    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
+
+    try {
+      for (const item of next) {
+        if (!prevMap[item.id]) {
+          const created = await dispatchesService.create(item);
+          item.id = created.id;
+        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
+          await dispatchesService.update(item.id, item);
+        }
+      }
+
+      for (const item of prev) {
+        if (!nextMap[item.id]) {
+          await dispatchesService.delete_(item.id);
+        }
+      }
+    } catch (err) {
+      console.error("Dispatch save error:", err);
+      setError(err.message);
+      return;
+    }
+
+    _setDispatches(next);
+  };
+
   const setPurchases = async (updater) => {
     const prev = purchases;
     const next = typeof updater === "function" ? updater(prev) : updater;
@@ -370,6 +413,7 @@ export default function App() {
       _setSuppliers([]);
       _setTransporters([]);
       _setInvoices([]);
+      _setDispatches([]);
       _setPurchases([]);
       setPage("dashboard");
     } catch (err) {
@@ -380,6 +424,19 @@ export default function App() {
   const navigate = useCallback((p) => {
     setPage(p);
     setSidebarOpen(false);
+  }, []);
+
+  //toast
+  const showToast = useCallback((message, type = "info") => {
+    setToast({
+      open: true,
+      message,
+      type,
+    });
+  }, []);
+
+  const closeToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, open: false }));
   }, []);
 
   const currentNav = NAV_ITEMS.find((n) => n.key === page);
@@ -419,20 +476,23 @@ export default function App() {
             customers={customers}
             setCustomers={setCustomers}
             invoices={invoices}
+            showToast={showToast}
             setInvoices={setInvoices}
             company={COMPANY}
           />
         );
 
       case "inventory":
-        return <InventoryModule products={products} setProducts={setProducts} />;
+        return <InventoryModule products={products} showToast={showToast} setProducts={setProducts} />;
 
       case "purchase":
         return (
           <PurchaseModule
             products={products}
             setProducts={setProducts}
+            showToast={showToast}
             suppliers={suppliers}
+            setSuppliers={setSuppliers}
             purchases={purchases}
             setPurchases={setPurchases}
           />
@@ -445,14 +505,25 @@ export default function App() {
             setCustomers={setCustomers}
             suppliers={suppliers}
             setSuppliers={setSuppliers}
+            showToast={showToast}
             invoices={invoices}
           />
         );
 
+      case "dispatch":
+        return (
+          <DispatchModule
+            invoices={invoices.filter((i) => i.invoiceType === "retail")}
+            dispatches={dispatches}
+            setDispatches={setDispatches}
+            showToast={showToast}
+          />
+        );
       case "transporters":
         return (
           <TransporterModule
             transporters={transporters}
+            showToast={showToast}
             setTransporters={setTransporters}
           />
         );
@@ -521,53 +592,57 @@ export default function App() {
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-56 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-56 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
       >
-        <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
-          <div className="w-7 h-7 bg-gray-900 rounded flex items-center justify-center text-white text-xs font-bold">
-            R
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-gray-900 truncate">
-              Rudra Granites
+        <div className="px-4 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gray-900 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0">
+              R
             </div>
-            <div className="text-[10px] text-gray-400 truncate">POS System</div>
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold text-gray-900 truncate leading-tight">
+                Rudra Granites
+              </div>
+              <div className="text-xs text-gray-400 truncate leading-tight mt-0.5">
+                POS System
+              </div>
+            </div>
           </div>
+
+
         </div>
 
-        <nav className="flex-1 py-2 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const IconComp = item.icon;
-            const isActive = page === item.key;
+        <nav className="flex-1 px-3 py-3 overflow-y-auto">
+          <div className="space-y-1">
+            {NAV_ITEMS.map((item) => {
+              const IconComp = item.icon;
+              const isActive = page === item.key;
 
-            return (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.key)}
-                className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-gray-100 text-gray-900 font-medium"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <IconComp size={16} />
-                <span className="truncate">{item.label}</span>
-                {item.key === "inventory" && lowStockCount > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                    {lowStockCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => navigate(item.key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all ${isActive
+                      ? "bg-gray-100 text-gray-900 font-semibold"
+                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
+                >
+                  <IconComp
+                    size={16}
+                    className={isActive ? "text-gray-900" : "text-gray-600"}
+                  />
+                  <span className="truncate flex-1 text-left">{item.label}</span>
+                  {item.key === "inventory" && lowStockCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+                      {lowStockCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </nav>
-
-        <div className="px-4 py-3 border-t border-gray-100 text-[10px] text-gray-400">
-          <div>GSTIN: {COMPANY.gstin}</div>
-          <div className="truncate">{COMPANY.stateName}</div>
-        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -604,6 +679,12 @@ export default function App() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{renderPage()}</main>
+        <Toast
+          open={toast.open}
+          message={toast.message}
+          type={toast.type}
+          onClose={closeToast}
+        />
       </div>
     </div>
   );

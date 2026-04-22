@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatCurrency, formatDate } from "../utils/formatters";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -10,6 +10,61 @@ import {
   RetailCustomerBillView,
   RetailCompanyBillView,
 } from "./BillingModule";
+
+const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-gray-50">
+            {columns.map((col, idx) => (
+              <th
+                key={col.key}
+                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${
+                  idx !== columns.length - 1 ? "border-r border-gray-200" : ""
+                } ${col.align === "right" ? "text-right" : ""}`}
+              >
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.length === 0 ? (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="px-4 py-8 text-center text-gray-500"
+              >
+                {emptyMsg}
+              </td>
+            </tr>
+          ) : (
+            data.map((row, rowIndex) => (
+              <tr
+                key={row.id || row.invoiceNo || rowIndex}
+                className="bg-white hover:bg-gray-50"
+              >
+                {columns.map((col, colIndex) => (
+                  <td
+                    key={col.key}
+                    className={`px-4 py-3 border-b border-gray-100 ${
+                      colIndex !== columns.length - 1
+                        ? "border-r border-gray-100"
+                        : ""
+                    } ${col.align === "right" ? "text-right" : ""}`}
+                  >
+                    {col.render ? col.render(row, rowIndex) : row[col.key]}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const printHtmlInIframe = (html) => {
   const iframe = document.createElement("iframe");
@@ -131,8 +186,24 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
     )
     .join("");
 
+  const isInterState = customer?.state !== company.stateCode;
+  const totalTax = Number(invoice.totalTax || 0);
+  const overallTaxPercent = Number(invoice.overallTaxPercent || 0);
+  const cgst = !isInterState ? totalTax / 2 : 0;
+  const sgst = !isInterState ? totalTax / 2 : 0;
+  const igst = isInterState ? totalTax : 0;
+
   const extraRows = `
-    ${invoice.overallTaxPercent > 0 ? `<div><strong>Tax (${invoice.overallTaxPercent}%):</strong> ${formatCurrency(invoice.totalTax)}</div>` : ""}
+    ${
+      overallTaxPercent > 0
+        ? !isInterState
+          ? `
+            <div><strong>CGST (${overallTaxPercent / 2}%):</strong> ${formatCurrency(cgst)}</div>
+            <div><strong>SGST (${overallTaxPercent / 2}%):</strong> ${formatCurrency(sgst)}</div>
+          `
+          : `<div><strong>IGST (${overallTaxPercent}%):</strong> ${formatCurrency(igst)}</div>`
+        : ""
+    }
     ${invoice.loadingCharge > 0 ? `<div><strong>Loading Charge:</strong> ${formatCurrency(invoice.loadingCharge)}</div>` : ""}
     ${invoice.transportCharge > 0 ? `<div><strong>Transport Charge:</strong> ${formatCurrency(invoice.transportCharge)}</div>` : ""}
     ${invoice.freightCharge > 0 ? `<div><strong>Freight Charge:</strong> ${formatCurrency(invoice.freightCharge)}</div>` : ""}
@@ -173,7 +244,7 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       </table>
 
       ${
-        invoice.overallTaxPercent > 0 ||
+        overallTaxPercent > 0 ||
         invoice.loadingCharge > 0 ||
         invoice.transportCharge > 0 ||
         invoice.freightCharge > 0 ||
@@ -242,12 +313,21 @@ export const RetailInvoiceModule = ({
   invoices,
   setInvoices,
   company,
+  showToast,
 }) => {
   const [tab, setTab] = useState("create");
   const [showCustomerBill, setShowCustomerBill] = useState(null);
   const [showCompanyBill, setShowCompanyBill] = useState(null);
 
-  const retailInvoices = invoices.filter((inv) => inv.invoiceType === "retail");
+  const retailInvoices = useMemo(() => {
+    return invoices
+      .filter((inv) => inv.invoiceType === "retail")
+      .sort((a, b) => {
+        const bNo = Number(b.invoiceNo || 0);
+        const aNo = Number(a.invoiceNo || 0);
+        return bNo - aNo;
+      });
+  }, [invoices]);
 
   return (
     <div>
@@ -275,56 +355,78 @@ export const RetailInvoiceModule = ({
             showInvoiceTypeField={false}
             allowRateEdit={true}
             onInvoiceCreated={() => setTab("list")}
+            showToast={showToast}
           />
         )}
 
         {tab === "list" && (
           <Card title="Retail Invoices">
-            {retailInvoices.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No retail invoices created yet.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Invoice #</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Date</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Customer</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Phone</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">Total</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {retailInvoices.map((inv) => {
-                      const customer = customers.find((c) => c.id === inv.customerId);
-
-                      return (
-                        <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 font-mono font-medium">{inv.invoiceNo}</td>
-                          <td className="px-4 py-3 text-gray-600">{formatDate(inv.date)}</td>
-                          <td className="px-4 py-3">{customer?.name || "—"}</td>
-                          <td className="px-4 py-3">{customer?.mobile || "—"}</td>
-                          <td className="px-4 py-3 text-right font-semibold">{formatCurrency(inv.total)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Button size="sm" variant="ghost" onClick={() => setShowCustomerBill(inv)}>
-                                <Icons.file size={14} /> Customer Bill
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setShowCompanyBill(inv)}>
-                                <Icons.file size={14} /> Company Bill
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <StyledTable
+              columns={[
+                {
+                  key: "invoiceNo",
+                  label: "Invoice #",
+                  render: (inv) => (
+                    <span className="font-mono font-medium">{inv.invoiceNo}</span>
+                  ),
+                },
+                {
+                  key: "date",
+                  label: "Date",
+                  render: (inv) => (
+                    <span className="text-gray-600">{formatDate(inv.date)}</span>
+                  ),
+                },
+                {
+                  key: "customer",
+                  label: "Customer",
+                  render: (inv) => {
+                    const customer = customers.find((c) => c.id === inv.customerId);
+                    return customer?.name || "—";
+                  },
+                },
+                {
+                  key: "phone",
+                  label: "Phone",
+                  render: (inv) => {
+                    const customer = customers.find((c) => c.id === inv.customerId);
+                    return customer?.mobile || "—";
+                  },
+                },
+                {
+                  key: "total",
+                  label: "Total",
+                  align: "right",
+                  render: (inv) => (
+                    <span className="font-semibold">{formatCurrency(inv.total)}</span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  label: "Actions",
+                  render: (inv) => (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowCustomerBill(inv)}
+                      >
+                        <Icons.file size={14} /> Customer Bill
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowCompanyBill(inv)}
+                      >
+                        <Icons.file size={14} /> Company Bill
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              data={retailInvoices}
+              emptyMsg="No retail invoices created yet."
+            />
           </Card>
         )}
       </div>
@@ -340,8 +442,12 @@ export const RetailInvoiceModule = ({
             <div className="flex justify-end">
               <Button
                 onClick={() => {
-                  const customer = customers.find((c) => c.id === showCustomerBill.customerId);
-                  printHtmlInIframe(buildCustomerBillHTML(showCustomerBill, company, customer));
+                  const customer = customers.find(
+                    (c) => c.id === showCustomerBill.customerId
+                  );
+                  printHtmlInIframe(
+                    buildCustomerBillHTML(showCustomerBill, company, customer)
+                  );
                 }}
               >
                 <Icons.printer size={14} /> Print / Save PDF
@@ -351,7 +457,9 @@ export const RetailInvoiceModule = ({
             <RetailCustomerBillView
               invoice={showCustomerBill}
               company={company}
-              customer={customers.find((c) => c.id === showCustomerBill.customerId)}
+              customer={customers.find(
+                (c) => c.id === showCustomerBill.customerId
+              )}
             />
           </div>
         )}
@@ -368,8 +476,12 @@ export const RetailInvoiceModule = ({
             <div className="flex justify-end">
               <Button
                 onClick={() => {
-                  const customer = customers.find((c) => c.id === showCompanyBill.customerId);
-                  printHtmlInIframe(buildCompanyBillHTML(showCompanyBill, company, customer));
+                  const customer = customers.find(
+                    (c) => c.id === showCompanyBill.customerId
+                  );
+                  printHtmlInIframe(
+                    buildCompanyBillHTML(showCompanyBill, company, customer)
+                  );
                 }}
               >
                 <Icons.printer size={14} /> Print / Save PDF
@@ -379,7 +491,9 @@ export const RetailInvoiceModule = ({
             <RetailCompanyBillView
               invoice={showCompanyBill}
               company={company}
-              customer={customers.find((c) => c.id === showCompanyBill.customerId)}
+              customer={customers.find(
+                (c) => c.id === showCompanyBill.customerId
+              )}
             />
           </div>
         )}
