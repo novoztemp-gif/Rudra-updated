@@ -1,5 +1,5 @@
-import { supabase } from '../lib/supabase';
-import * as productsService from './products';
+import { supabase } from "../lib/supabase";
+import * as productsService from "./products";
 
 const mapPurchase = (row) => ({
   id: row.id,
@@ -9,18 +9,21 @@ const mapPurchase = (row) => ({
   supplierInvoiceNo: row.supplier_invoice_no,
   date: row.date,
   status: row.status,
-  total: row.total,
+  total: Number(row.total ?? 0),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
-  items: (row.purchase_items || []).map(item => ({
+
+  items: (row.purchase_items || []).map((item) => ({
     id: item.id,
     productId: item.product_id,
     name: item.name,
     hsn: item.hsn,
     unit: item.unit,
-    qty: item.qty,
-    purchaseRate: item.purchase_rate,
-    amount: item.amount,
+    qty: Number(item.qty ?? 0),
+    purchaseRate: Number(item.purchase_rate ?? 0),
+    stockBefore: Number(item.stock_before ?? 0),
+    stockAfter: Number(item.stock_after ?? 0),
+    amount: Number(item.amount ?? 0),
   })),
 });
 
@@ -35,59 +38,63 @@ const unmapPurchase = (obj) => ({
 });
 
 export async function getAll() {
-  // Get purchases
   const { data: purchases, error: purError } = await supabase
-    .from('purchases')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from("purchases")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (purError) throw purError;
 
-  // Get all purchase items
   const { data: items, error: itemsError } = await supabase
-    .from('purchase_items')
-    .select('*');
+    .from("purchase_items")
+    .select("*")
+    .order("sort_order", { ascending: true });
 
   if (itemsError) throw itemsError;
 
-  // Manual join
   const itemsMap = {};
-  items.forEach(item => {
-    if (!itemsMap[item.purchase_id]) itemsMap[item.purchase_id] = [];
+
+  items.forEach((item) => {
+    if (!itemsMap[item.purchase_id]) {
+      itemsMap[item.purchase_id] = [];
+    }
+
     itemsMap[item.purchase_id].push(item);
   });
 
-  return purchases.map(pur => mapPurchase({
-    ...pur,
-    purchase_items: itemsMap[pur.id] || []
-  }));
+  return purchases.map((purchase) =>
+    mapPurchase({
+      ...purchase,
+      purchase_items: itemsMap[purchase.id] || [],
+    })
+  );
 }
 
 export async function create(purchase) {
-  // Step 1: Insert purchase (without items)
   const purchaseToInsert = {
     ...unmapPurchase(purchase),
-    created_by: null, // Set if you have user context
+    created_by: null,
   };
 
   const { error: purError } = await supabase
-    .from('purchases')
+    .from("purchases")
     .insert([purchaseToInsert]);
 
   if (purError) throw purError;
 
-  // Fetch the inserted purchase by purchase_no
   const { data: fetchedPurchases, error: fetchError } = await supabase
-    .from('purchases')
-    .select('*')
-    .eq('purchase_no', purchase.purchaseNo);
+    .from("purchases")
+    .select("*")
+    .eq("purchase_no", purchase.purchaseNo);
 
   if (fetchError) throw fetchError;
-  if (!fetchedPurchases || fetchedPurchases.length === 0) throw new Error('Failed to fetch inserted purchase');
+
+  if (!fetchedPurchases || fetchedPurchases.length === 0) {
+    throw new Error("Failed to fetch inserted purchase");
+  }
 
   const newPurchase = fetchedPurchases[0];
 
-  // Step 2: Insert purchase items
   if (purchase.items && purchase.items.length > 0) {
     const itemsToInsert = purchase.items.map((item, idx) => ({
       purchase_id: newPurchase.id,
@@ -95,66 +102,73 @@ export async function create(purchase) {
       name: item.name,
       hsn: item.hsn,
       unit: item.unit,
-      qty: item.qty,
-      purchase_rate: item.purchaseRate,
-      amount: item.amount,
+      qty: Number(item.qty ?? 0),
+      purchase_rate: Number(item.purchaseRate ?? 0),
+      stock_before: Number(item.stockBefore ?? 0),
+      stock_after: Number(item.stockAfter ?? 0),
+      amount: Number(item.amount ?? 0),
       sort_order: idx,
     }));
 
     const { error: itemsError } = await supabase
-      .from('purchase_items')
+      .from("purchase_items")
       .insert(itemsToInsert);
 
     if (itemsError) throw itemsError;
 
-    // Step 3: Increment stock for each product
     for (const item of purchase.items) {
       const products = await productsService.getAll();
-      const prod = products.find(p => p.id === item.productId);
-      if (prod) {
-        await productsService.updateStock(item.productId, prod.stock + item.qty);
+      const product = products.find((p) => p.id === item.productId);
+
+      if (product) {
+        await productsService.updateStock(
+          item.productId,
+          Number(product.stock ?? 0) + Number(item.qty ?? 0)
+        );
       }
     }
   }
 
-  // Fetch purchase items
-  const { data: purchaseItems } = await supabase
-    .from('purchase_items')
-    .select('*')
-    .eq('purchase_id', newPurchase.id);
+  const { data: purchaseItems, error: itemFetchError } = await supabase
+    .from("purchase_items")
+    .select("*")
+    .eq("purchase_id", newPurchase.id)
+    .order("sort_order", { ascending: true });
+
+  if (itemFetchError) throw itemFetchError;
 
   return mapPurchase({
     ...newPurchase,
-    purchase_items: purchaseItems || []
+    purchase_items: purchaseItems || [],
   });
 }
 
 export async function update(id, purchase) {
   const { data, error } = await supabase
-    .from('purchases')
+    .from("purchases")
     .update(unmapPurchase(purchase))
-    .eq('id', id)
+    .eq("id", id)
     .select()
     .single();
 
   if (error) throw error;
 
-  const { data: purchaseItems } = await supabase
-    .from('purchase_items')
-    .select('*')
-    .eq('purchase_id', id);
+  const { data: purchaseItems, error: itemFetchError } = await supabase
+    .from("purchase_items")
+    .select("*")
+    .eq("purchase_id", id)
+    .order("sort_order", { ascending: true });
+
+  if (itemFetchError) throw itemFetchError;
 
   return mapPurchase({
     ...data,
-    purchase_items: purchaseItems || []
+    purchase_items: purchaseItems || [],
   });
 }
 
 export async function delete_(id) {
-  const { error } = await supabase
-    .from('purchases')
-    .delete()
-    .eq('id', id);
+  const { error } = await supabase.from("purchases").delete().eq("id", id);
 
   if (error) throw error;
 }

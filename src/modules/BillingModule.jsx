@@ -48,6 +48,7 @@ export const BillingModule = ({
         active={tab}
         onChange={setTab}
       />
+
       <div className="mt-4">
         {tab === "create" ? (
           <InvoiceCreator
@@ -60,6 +61,7 @@ export const BillingModule = ({
             setInvoices={setInvoices}
             company={company}
             showToast={showToast}
+            fixedInvoiceType="retail"
           />
         ) : (
           <InvoiceList
@@ -192,7 +194,7 @@ export const InvoiceCreator = ({
   setInvoices,
   company,
   onInvoiceCreated,
-  fixedInvoiceType = "tax",
+  fixedInvoiceType = "retail",
   showInvoiceTypeField = false,
   allowRateEdit = true,
   showToast,
@@ -278,6 +280,7 @@ export const InvoiceCreator = ({
       setItemForm((prev) => ({ ...prev, qty: "" }));
       return;
     }
+
     const num = Math.max(0, Number(value));
     setItemForm((prev) => ({ ...prev, qty: String(num) }));
   };
@@ -287,6 +290,7 @@ export const InvoiceCreator = ({
       setItemForm((prev) => ({ ...prev, rate: "" }));
       return;
     }
+
     const num = Math.max(0, Number(value));
     setItemForm((prev) => ({ ...prev, rate: String(num) }));
   };
@@ -415,6 +419,7 @@ export const InvoiceCreator = ({
 
       const updatedProducts = products.map((p) => {
         if (!qtyByProduct[p.id]) return p;
+
         return {
           ...p,
           stock: p.stock - qtyByProduct[p.id],
@@ -541,6 +546,7 @@ export const InvoiceCreator = ({
                 setForm((prev) => ({ ...prev, date: e.target.value }))
               }
             />
+
             <Input
               label="Payment Terms"
               value={form.paymentTerms}
@@ -595,7 +601,10 @@ export const InvoiceCreator = ({
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      loadingCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
+                      loadingCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -609,7 +618,10 @@ export const InvoiceCreator = ({
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      transportCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
+                      transportCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -623,7 +635,10 @@ export const InvoiceCreator = ({
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      freightCharge: e.target.value === "" ? "" : String(Math.max(0, Number(e.target.value))),
+                      freightCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
                     }))
                   }
                   placeholder="0"
@@ -943,10 +958,12 @@ export const InvoiceCreator = ({
 
 const InvoiceList = ({ invoices, customers, onView, setInvoices, showToast }) => {
   const [search, setSearch] = useState("");
+  const [editTransportInvoice, setEditTransportInvoice] = useState(null);
+
   const filtered = invoices.filter((inv) => {
     const cust = customers.find((c) => c.id === inv.customerId);
     return (
-      inv.invoiceNo.includes(search) ||
+      String(inv.invoiceNo || "").includes(search) ||
       cust?.name?.toLowerCase().includes(search.toLowerCase())
     );
   });
@@ -955,11 +972,13 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices, showToast }) =>
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
+
     input.onchange = (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
       const reader = new FileReader();
+
       reader.onload = (evt) => {
         try {
           const data = JSON.parse(evt.target?.result || "");
@@ -990,110 +1009,285 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices, showToast }) =>
           );
 
           showToast?.(
-            `Invoice #${invoices.find((i) => i.id === invoiceId)?.invoiceNo} updated with IRN`,
+            `Invoice #${
+              invoices.find((i) => i.id === invoiceId)?.invoiceNo
+            } updated with IRN`,
             "success"
           );
         } catch (err) {
           showToast?.(`Invalid JSON: ${err.message}`, "error");
         }
       };
+
       reader.readAsText(file);
     };
+
     input.click();
   };
 
+  const handleSaveTransport = async () => {
+    if (!editTransportInvoice) return;
+
+    const subtotal =
+      Number(editTransportInvoice.subtotal || 0) ||
+      editTransportInvoice.items?.reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0
+      ) ||
+      0;
+
+    const totalTax = Number(editTransportInvoice.totalTax || 0);
+
+    const loadingCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.loadingCharge || 0)
+      : 0;
+
+    const transportCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.transportCharge || 0)
+      : 0;
+
+    const freightCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.freightCharge || 0)
+      : 0;
+
+    const updatedFields = {
+      hasTransportDetails: !!editTransportInvoice.hasTransportDetails,
+      loadingCharge,
+      transportCharge,
+      freightCharge,
+      transportNotes: editTransportInvoice.hasTransportDetails
+        ? String(editTransportInvoice.transportNotes || "").trim()
+        : "",
+      total: subtotal + totalTax + loadingCharge + transportCharge + freightCharge,
+    };
+
+    try {
+      await invoicesService.update(editTransportInvoice.id, updatedFields);
+
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === editTransportInvoice.id
+            ? { ...inv, ...updatedFields }
+            : inv
+        )
+      );
+
+      showToast?.("Transport details updated successfully", "success");
+      setEditTransportInvoice(null);
+    } catch (err) {
+      showToast?.(`Error updating transport: ${err.message}`, "error");
+    }
+  };
+
   return (
-    <Card
-      title="Invoices"
-      actions={
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search invoice..."
-        />
-      }
-    >
-      <Table
-        columns={[
-          {
-            key: "invoiceNo",
-            label: "Invoice #",
-            render: (r) => (
-              <span className="font-mono font-medium">{r.invoiceNo}</span>
-            ),
-          },
-          { key: "date", label: "Date", render: (r) => formatDate(r.date) },
-          {
-            key: "customer",
-            label: "Customer",
-            render: (r) =>
-              customers.find((c) => c.id === r.customerId)?.name || "—",
-          },
-          {
-            key: "total",
-            label: "Total",
-            align: "right",
-            render: (r) => (
-              <span className="font-semibold">{formatCurrency(r.total)}</span>
-            ),
-          },
-          {
-            key: "irn",
-            label: "IRN",
-            render: (r) =>
-              r.irn ? (
-                <span
-                  className="font-mono text-xs text-green-700 font-medium truncate"
-                  title={r.irn}
-                >
-                  {r.irn.substring(0, 16)}...
-                </span>
-              ) : (
-                <span className="text-gray-400 text-sm">—</span>
+    <>
+      <Card
+        title="Invoices"
+        actions={
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search invoice..."
+          />
+        }
+      >
+        <Table
+          columns={[
+            {
+              key: "invoiceNo",
+              label: "Invoice #",
+              render: (r) => (
+                <span className="font-mono font-medium">{r.invoiceNo}</span>
               ),
-          },
-          {
-            key: "status",
-            label: "Status",
-            render: (r) =>
-              r.irn ? (
-                <Badge variant="success">✓ Signed</Badge>
-              ) : (
-                <Badge variant="warning">⧗ Pending</Badge>
+            },
+            { key: "date", label: "Date", render: (r) => formatDate(r.date) },
+            {
+              key: "customer",
+              label: "Customer",
+              render: (r) =>
+                customers.find((c) => c.id === r.customerId)?.name || "—",
+            },
+            {
+              key: "total",
+              label: "Total",
+              align: "right",
+              render: (r) => (
+                <span className="font-semibold">{formatCurrency(r.total)}</span>
               ),
-          },
-          {
-            key: "actions",
-            label: "",
-            render: (r) => (
-              <div className="flex items-center gap-1">
-                {!r.irn && (
+            },
+            {
+              key: "irn",
+              label: "IRN",
+              render: (r) =>
+                r.irn ? (
+                  <span
+                    className="font-mono text-xs text-green-700 font-medium truncate"
+                    title={r.irn}
+                  >
+                    {r.irn.substring(0, 16)}...
+                  </span>
+                ) : (
+                  <span className="text-gray-400 text-sm">—</span>
+                ),
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (r) =>
+                r.irn ? (
+                  <Badge variant="success">✓ Signed</Badge>
+                ) : (
+                  <Badge variant="warning">⧗ Pending</Badge>
+                ),
+            },
+            {
+              key: "actions",
+              label: "",
+              render: (r) => (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {!r.irn && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleUploadSigned(r.id)}
+                      title="Upload signed JSON from portal"
+                    >
+                      <Icons.download size={14} /> Sign
+                    </Button>
+                  )}
+
+                  <Button size="sm" variant="ghost" onClick={() => onView(r)}>
+                    <Icons.file size={14} /> View
+                  </Button>
+
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => handleUploadSigned(r.id)}
-                    title="Upload signed JSON from portal"
+                    onClick={() => setEditTransportInvoice(r)}
+                    title="Edit transport details"
                   >
-                    <Icons.download size={14} /> Sign
+                    <Icons.truck size={14} /> Edit Transport
                   </Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => onView(r)}>
-                  <Icons.file size={14} /> View
-                </Button>
+                </div>
+              ),
+            },
+          ]}
+          data={filtered}
+          emptyMsg="No invoices yet"
+        />
+      </Card>
+
+      <Modal
+        open={!!editTransportInvoice}
+        onClose={() => setEditTransportInvoice(null)}
+        title={`Edit Transport - Invoice #${editTransportInvoice?.invoiceNo}`}
+        size="md"
+      >
+        {editTransportInvoice && (
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={!!editTransportInvoice.hasTransportDetails}
+                onChange={(e) =>
+                  setEditTransportInvoice((prev) => ({
+                    ...prev,
+                    hasTransportDetails: e.target.checked,
+                  }))
+                }
+              />
+              Enable transport details
+            </label>
+
+            {editTransportInvoice.hasTransportDetails && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Loading Charge"
+                  type="number"
+                  min="0"
+                  value={editTransportInvoice.loadingCharge || ""}
+                  onChange={(e) =>
+                    setEditTransportInvoice((prev) => ({
+                      ...prev,
+                      loadingCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
+                    }))
+                  }
+                  placeholder="0"
+                />
+
+                <Input
+                  label="Transport Charge"
+                  type="number"
+                  min="0"
+                  value={editTransportInvoice.transportCharge || ""}
+                  onChange={(e) =>
+                    setEditTransportInvoice((prev) => ({
+                      ...prev,
+                      transportCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
+                    }))
+                  }
+                  placeholder="0"
+                />
+
+                <Input
+                  label="Freight Charge"
+                  type="number"
+                  min="0"
+                  value={editTransportInvoice.freightCharge || ""}
+                  onChange={(e) =>
+                    setEditTransportInvoice((prev) => ({
+                      ...prev,
+                      freightCharge:
+                        e.target.value === ""
+                          ? ""
+                          : String(Math.max(0, Number(e.target.value))),
+                    }))
+                  }
+                  placeholder="0"
+                />
+
+                <Input
+                  label="Transport Notes"
+                  value={editTransportInvoice.transportNotes || ""}
+                  onChange={(e) =>
+                    setEditTransportInvoice((prev) => ({
+                      ...prev,
+                      transportNotes: e.target.value,
+                    }))
+                  }
+                  placeholder="Optional notes"
+                />
               </div>
-            ),
-          },
-        ]}
-        data={filtered}
-        emptyMsg="No invoices yet"
-      />
-    </Card>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setEditTransportInvoice(null)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveTransport}>
+                <Icons.check size={14} /> Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </>
   );
 };
 
 // ─── TAX INVOICE PRINT VIEW ─────────────────────────────────────────────────
 export const InvoicePrintView = ({ invoice, company, customer }) => {
   if (!invoice) return null;
+
   const consignee = customer;
   const buyer = customer;
   const taxableValue = invoice.items.reduce((s, i) => s + i.amount, 0);
@@ -1105,6 +1299,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
         <div className="text-center py-2 border-b border-gray-800 font-bold text-sm">
           Tax Invoice
         </div>
+
         <div className="grid grid-cols-3 border-b border-gray-800">
           <div className="px-3 py-2 border-r border-gray-800 text-[10px]">
             <div>
@@ -1121,6 +1316,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               {invoice.ackDate ? formatDate(invoice.ackDate) : "—"}
             </div>
           </div>
+
           <div className="px-3 py-2 border-r border-gray-800 text-[10px]">
             <div>
               <strong>Status</strong>
@@ -1133,6 +1329,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               )}
             </div>
           </div>
+
           {invoice.signedQRCode && (
             <div className="px-3 py-2 flex items-center justify-center bg-gray-50">
               <QRCode value={invoice.signedQRCode} size={80} level="M" />
@@ -1150,6 +1347,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
             </div>
             <div>E-Mail : {company.email}</div>
           </div>
+
           <div className="grid grid-cols-2">
             <div className="p-2 border-r border-b border-gray-800">
               <span className="text-gray-500">Invoice No.</span>
@@ -1198,6 +1396,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               {consignee?.state}
             </div>
           </div>
+
           <div className="grid grid-cols-2">
             <div className="p-2 border-r border-b border-gray-800">
               <span className="text-gray-500">Dispatch Doc No.</span>
@@ -1252,6 +1451,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               <th className="p-1.5 text-right">Amount</th>
             </tr>
           </thead>
+
           <tbody>
             {invoice.items.map((item, idx) => (
               <tr key={idx} className="border-b border-gray-800">
@@ -1297,6 +1497,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
                     {formatCurrency(invoice.cgst)}
                   </td>
                 </tr>
+
                 <tr className="border-b border-gray-800">
                   <td className="border-r border-gray-800 p-1.5" />
                   <td
@@ -1331,6 +1532,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
               </tr>
             )}
           </tbody>
+
           <tfoot>
             <tr className="border-t-2 border-gray-800">
               <td className="border-r border-gray-800 p-2" />
@@ -1392,6 +1594,7 @@ export const InvoicePrintView = ({ invoice, company, customer }) => {
                 <th className="p-1.5 text-right">Total Tax Amount</th>
               </tr>
             </thead>
+
             <tbody>
               <tr className="border-b border-gray-800">
                 <td className="border-r border-gray-800 p-1.5">
@@ -1472,12 +1675,6 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
   return (
     <div className="bg-white p-6 text-sm" id="invoice-print">
       <div className="max-w-2xl mx-auto border border-gray-300 rounded-lg overflow-hidden">
-        <div className="p-4 border-b text-center">
-          <div className="text-lg font-bold">{company.name}</div>
-          <div className="text-xs text-gray-600">{company.address}</div>
-          <div className="text-xs text-gray-600">Phone: {company.phone}</div>
-        </div>
-
         <div className="p-4 grid grid-cols-2 gap-4 text-xs border-b">
           <div>
             <div>
@@ -1506,6 +1703,7 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
               <th className="px-3 py-2 text-right">Amount</th>
             </tr>
           </thead>
+
           <tbody>
             {invoice.items.map((item, idx) => (
               <tr key={idx} className="border-b">
@@ -1552,18 +1750,21 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
                 <span>{formatCurrency(loadingCharge)}</span>
               </div>
             )}
+
             {transportCharge > 0 && (
               <div className="flex justify-between">
                 <span>Transport Charge</span>
                 <span>{formatCurrency(transportCharge)}</span>
               </div>
             )}
+
             {freightCharge > 0 && (
               <div className="flex justify-between">
                 <span>Freight Charge</span>
                 <span>{formatCurrency(freightCharge)}</span>
               </div>
             )}
+
             {invoice.transportNotes && (
               <div className="pt-2 text-gray-600">
                 <strong>Notes:</strong> {invoice.transportNotes}
@@ -1589,11 +1790,6 @@ export const RetailCompanyBillView = ({ invoice, company, customer }) => {
   return (
     <div className="bg-white p-6 text-sm" id="retail-company-bill">
       <div className="max-w-2xl mx-auto border border-gray-300 rounded-lg overflow-hidden">
-        <div className="p-4 border-b text-center">
-          <div className="text-lg font-bold">{company.name}</div>
-          <div className="text-xs text-gray-600">{company.address}</div>
-        </div>
-
         <div className="p-4 grid grid-cols-2 gap-4 text-xs border-b">
           <div>
             <div>
@@ -1620,6 +1816,7 @@ export const RetailCompanyBillView = ({ invoice, company, customer }) => {
               <th className="px-3 py-2 text-right">Quantity</th>
             </tr>
           </thead>
+
           <tbody>
             {invoice.items.map((item, idx) => (
               <tr key={idx} className="border-b">

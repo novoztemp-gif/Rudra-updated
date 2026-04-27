@@ -5,6 +5,7 @@ import { Card } from "../components/ui/Card";
 import { Modal } from "../components/ui/Modal";
 import { Tabs } from "../components/ui/Tabs";
 import { Icons } from "../components/ui/Icons";
+import * as invoicesService from "../services/invoices";
 import {
   InvoiceCreator,
   RetailCustomerBillView,
@@ -66,6 +67,15 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
   );
 };
 
+const escapeHtml = (value) => {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+};
+
 const printHtmlInIframe = (html) => {
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
@@ -85,74 +95,156 @@ const printHtmlInIframe = (html) => {
       <head>
         <title></title>
         <style>
+          @page {
+            size: auto;
+            margin: 10mm;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
           body {
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background: #ffffff;
             font-family: Arial, sans-serif;
             color: #111827;
+            font-size: 11px;
           }
+
           .bill-wrap {
-            max-width: 900px;
+            width: 100%;
+            max-width: 760px;
             margin: 0 auto;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
             overflow: hidden;
             background: #fff;
           }
-          .bill-header {
-            padding: 16px;
-            border-bottom: 1px solid #d1d5db;
-            text-align: center;
-          }
-          .bill-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 4px;
-          }
-          .muted {
-            font-size: 12px;
-            color: #6b7280;
-          }
+
           .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            padding: 16px;
-            border-bottom: 1px solid #d1d5db;
-            font-size: 12px;
+            border-bottom: 1px solid #cbd5e1;
           }
-          .info-grid div div {
-            margin-bottom: 4px;
+
+          .info-box {
+            padding: 10px 12px;
+            line-height: 1.45;
           }
+
+          .info-box:first-child {
+            border-right: 1px solid #cbd5e1;
+          }
+
           table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12px;
+            table-layout: fixed;
+            font-size: 11px;
           }
+
           thead {
-            background: #f9fafb;
+            background: #f8fafc;
           }
-          th, td {
-            padding: 10px 12px;
+
+          th,
+          td {
+            padding: 8px 10px;
             border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: anywhere;
           }
+
           th {
+            font-weight: 700;
             text-align: left;
-            font-weight: 600;
           }
+
           .text-right {
             text-align: right;
           }
-          .total-box {
-            padding: 16px;
-            text-align: right;
-            font-size: 14px;
-            border-top: 1px solid #d1d5db;
+
+          .product-col {
+            width: 46%;
           }
-          @page {
-            size: auto;
-            margin: 12mm;
+
+          .qty-col {
+            width: 14%;
+          }
+
+          .rate-col {
+            width: 20%;
+          }
+
+          .amount-col {
+            width: 20%;
+          }
+
+          .company-product-col {
+            width: 70%;
+          }
+
+          .company-qty-col {
+            width: 30%;
+          }
+
+          .summary-section {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 260px;
+            gap: 12px;
+            padding: 10px 12px;
+            border-top: 1px solid #cbd5e1;
+            font-size: 11px;
+          }
+
+          .summary-box {
+            width: 100%;
+          }
+
+          .summary-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            margin-bottom: 4px;
+            align-items: start;
+          }
+
+          .summary-label {
+            font-weight: 700;
+          }
+
+          .summary-value {
+            text-align: right;
+            white-space: nowrap;
+          }
+
+          .notes-box {
+            line-height: 1.45;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+          }
+
+          .total-box {
+            padding: 12px;
+            text-align: right;
+            font-size: 13px;
+            font-weight: 700;
+            border-top: 1px solid #cbd5e1;
+          }
+
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            .bill-wrap {
+              max-width: 100%;
+              page-break-inside: avoid;
+            }
           }
         </style>
       </head>
@@ -177,8 +269,8 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
     .map(
       (item) => `
         <tr>
-          <td>${item.name}</td>
-          <td class="text-right">${item.qty}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td class="text-right">${escapeHtml(item.qty)}</td>
           <td class="text-right">${formatCurrency(item.rate)}</td>
           <td class="text-right">${formatCurrency(item.amount)}</td>
         </tr>
@@ -193,49 +285,90 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
   const sgst = !isInterState ? totalTax / 2 : 0;
   const igst = isInterState ? totalTax : 0;
 
-  const extraRows = `
+  const loadingCharge = Number(invoice.loadingCharge || 0);
+  const transportCharge = Number(invoice.transportCharge || 0);
+  const freightCharge = Number(invoice.freightCharge || 0);
+  const hasSummary =
+    overallTaxPercent > 0 ||
+    loadingCharge > 0 ||
+    transportCharge > 0 ||
+    freightCharge > 0 ||
+    !!invoice.transportNotes;
+
+  const taxRows =
+    overallTaxPercent > 0
+      ? !isInterState
+        ? `
+          <div class="summary-row">
+            <div class="summary-label">CGST (${overallTaxPercent / 2}%)</div>
+            <div class="summary-value">${formatCurrency(cgst)}</div>
+          </div>
+          <div class="summary-row">
+            <div class="summary-label">SGST (${overallTaxPercent / 2}%)</div>
+            <div class="summary-value">${formatCurrency(sgst)}</div>
+          </div>
+        `
+        : `
+          <div class="summary-row">
+            <div class="summary-label">IGST (${overallTaxPercent}%)</div>
+            <div class="summary-value">${formatCurrency(igst)}</div>
+          </div>
+        `
+      : "";
+
+  const chargeRows = `
     ${
-      overallTaxPercent > 0
-        ? !isInterState
-          ? `
-            <div><strong>CGST (${overallTaxPercent / 2}%):</strong> ${formatCurrency(cgst)}</div>
-            <div><strong>SGST (${overallTaxPercent / 2}%):</strong> ${formatCurrency(sgst)}</div>
-          `
-          : `<div><strong>IGST (${overallTaxPercent}%):</strong> ${formatCurrency(igst)}</div>`
+      loadingCharge > 0
+        ? `
+          <div class="summary-row">
+            <div class="summary-label">Loading Charge</div>
+            <div class="summary-value">${formatCurrency(loadingCharge)}</div>
+          </div>
+        `
         : ""
     }
-    ${invoice.loadingCharge > 0 ? `<div><strong>Loading Charge:</strong> ${formatCurrency(invoice.loadingCharge)}</div>` : ""}
-    ${invoice.transportCharge > 0 ? `<div><strong>Transport Charge:</strong> ${formatCurrency(invoice.transportCharge)}</div>` : ""}
-    ${invoice.freightCharge > 0 ? `<div><strong>Freight Charge:</strong> ${formatCurrency(invoice.freightCharge)}</div>` : ""}
-    ${invoice.transportNotes ? `<div style="margin-top:8px;"><strong>Notes:</strong> ${invoice.transportNotes}</div>` : ""}
+    ${
+      transportCharge > 0
+        ? `
+          <div class="summary-row">
+            <div class="summary-label">Transport Charge</div>
+            <div class="summary-value">${formatCurrency(transportCharge)}</div>
+          </div>
+        `
+        : ""
+    }
+    ${
+      freightCharge > 0
+        ? `
+          <div class="summary-row">
+            <div class="summary-label">Freight Charge</div>
+            <div class="summary-value">${formatCurrency(freightCharge)}</div>
+          </div>
+        `
+        : ""
+    }
   `;
 
   return `
     <div class="bill-wrap">
-      <div class="bill-header">
-        <div class="bill-title">${company.name}</div>
-        <div class="muted">${company.address || ""}</div>
-        <div class="muted">Phone: ${company.phone || "—"}</div>
-      </div>
-
       <div class="info-grid">
-        <div>
-          <div><strong>Invoice No:</strong> ${invoice.invoiceNo}</div>
+        <div class="info-box">
+          <div><strong>Invoice No:</strong> ${escapeHtml(invoice.invoiceNo)}</div>
           <div><strong>Date:</strong> ${formatDate(invoice.date)}</div>
         </div>
-        <div>
-          <div><strong>Customer:</strong> ${customer?.name || "—"}</div>
-          <div><strong>Phone:</strong> ${customer?.mobile || "—"}</div>
+        <div class="info-box">
+          <div><strong>Customer:</strong> ${escapeHtml(customer?.name || "—")}</div>
+          <div><strong>Phone:</strong> ${escapeHtml(customer?.mobile || "—")}</div>
         </div>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th>Product</th>
-            <th class="text-right">Qty</th>
-            <th class="text-right">Rate</th>
-            <th class="text-right">Amount</th>
+            <th class="product-col">Product</th>
+            <th class="qty-col text-right">Qty</th>
+            <th class="rate-col text-right">Rate</th>
+            <th class="amount-col text-right">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -244,17 +377,27 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       </table>
 
       ${
-        overallTaxPercent > 0 ||
-        invoice.loadingCharge > 0 ||
-        invoice.transportCharge > 0 ||
-        invoice.freightCharge > 0 ||
-        invoice.transportNotes
-          ? `<div style="padding:16px; border-top:1px solid #d1d5db; font-size:12px;">${extraRows}</div>`
+        hasSummary
+          ? `
+            <div class="summary-section">
+              <div class="notes-box">
+                ${
+                  invoice.transportNotes
+                    ? `<strong>Notes:</strong> ${escapeHtml(invoice.transportNotes)}`
+                    : ""
+                }
+              </div>
+              <div class="summary-box">
+                ${taxRows}
+                ${chargeRows}
+              </div>
+            </div>
+          `
           : ""
       }
 
       <div class="total-box">
-        <strong>Total:</strong> ${formatCurrency(invoice.total)}
+        Total: ${formatCurrency(invoice.total)}
       </div>
     </div>
   `;
@@ -265,8 +408,8 @@ const buildCompanyBillHTML = (invoice, company, customer) => {
     .map(
       (item) => `
         <tr>
-          <td>${item.name}</td>
-          <td class="text-right">${item.qty} ${item.unit}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td class="text-right">${escapeHtml(item.qty)} ${escapeHtml(item.unit)}</td>
         </tr>
       `
     )
@@ -274,27 +417,22 @@ const buildCompanyBillHTML = (invoice, company, customer) => {
 
   return `
     <div class="bill-wrap">
-      <div class="bill-header">
-        <div class="bill-title">${company.name}</div>
-        <div class="muted">${company.address || ""}</div>
-      </div>
-
       <div class="info-grid">
-        <div>
-          <div><strong>Invoice No:</strong> ${invoice.invoiceNo}</div>
+        <div class="info-box">
+          <div><strong>Invoice No:</strong> ${escapeHtml(invoice.invoiceNo)}</div>
           <div><strong>Date:</strong> ${formatDate(invoice.date)}</div>
         </div>
-        <div>
-          <div><strong>Customer:</strong> ${customer?.name || "—"}</div>
-          <div><strong>Phone:</strong> ${customer?.mobile || "—"}</div>
+        <div class="info-box">
+          <div><strong>Customer:</strong> ${escapeHtml(customer?.name || "—")}</div>
+          <div><strong>Phone:</strong> ${escapeHtml(customer?.mobile || "—")}</div>
         </div>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th>Product Name</th>
-            <th class="text-right">Quantity</th>
+            <th class="company-product-col">Product Name</th>
+            <th class="company-qty-col text-right">Quantity</th>
           </tr>
         </thead>
         <tbody>
@@ -318,6 +456,7 @@ export const RetailInvoiceModule = ({
   const [tab, setTab] = useState("create");
   const [showCustomerBill, setShowCustomerBill] = useState(null);
   const [showCompanyBill, setShowCompanyBill] = useState(null);
+  const [editTransportInvoice, setEditTransportInvoice] = useState(null);
 
   const retailInvoices = useMemo(() => {
     return invoices
@@ -328,6 +467,59 @@ export const RetailInvoiceModule = ({
         return bNo - aNo;
       });
   }, [invoices]);
+
+  const handleSaveTransport = async () => {
+    if (!editTransportInvoice) return;
+
+    const subtotal =
+      Number(editTransportInvoice.subtotal || 0) ||
+      editTransportInvoice.items?.reduce(
+        (sum, item) => sum + Number(item.amount || 0),
+        0
+      ) ||
+      0;
+
+    const totalTax = Number(editTransportInvoice.totalTax || 0);
+
+    const loadingCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.loadingCharge || 0)
+      : 0;
+
+    const transportCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.transportCharge || 0)
+      : 0;
+
+    const freightCharge = editTransportInvoice.hasTransportDetails
+      ? Number(editTransportInvoice.freightCharge || 0)
+      : 0;
+
+    const updatedFields = {
+      hasTransportDetails: !!editTransportInvoice.hasTransportDetails,
+      loadingCharge,
+      transportCharge,
+      freightCharge,
+      transportNotes: editTransportInvoice.hasTransportDetails
+        ? String(editTransportInvoice.transportNotes || "").trim()
+        : "",
+      total: subtotal + totalTax + loadingCharge + transportCharge + freightCharge,
+    };
+
+    try {
+      await invoicesService.update(editTransportInvoice.id, updatedFields);
+
+      const applyUpdate = (inv) =>
+        inv?.id === editTransportInvoice.id ? { ...inv, ...updatedFields } : inv;
+
+      setInvoices((prev) => prev.map(applyUpdate));
+      setShowCustomerBill((prev) => applyUpdate(prev));
+      setShowCompanyBill((prev) => applyUpdate(prev));
+
+      showToast?.("Transport details updated successfully", "success");
+      setEditTransportInvoice(null);
+    } catch (err) {
+      showToast?.(`Error updating transport: ${err.message}`, "error");
+    }
+  };
 
   return (
     <div>
@@ -420,6 +612,13 @@ export const RetailInvoiceModule = ({
                       >
                         <Icons.file size={14} /> Company Bill
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditTransportInvoice(inv)}
+                      >
+                        <Icons.truck size={14} /> Edit Transport
+                      </Button>
                     </div>
                   ),
                 },
@@ -495,6 +694,130 @@ export const RetailInvoiceModule = ({
                 (c) => c.id === showCompanyBill.customerId
               )}
             />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!editTransportInvoice}
+        onClose={() => setEditTransportInvoice(null)}
+        title={`Edit Transport #${editTransportInvoice?.invoiceNo}`}
+        size="md"
+      >
+        {editTransportInvoice && (
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={!!editTransportInvoice.hasTransportDetails}
+                onChange={(e) =>
+                  setEditTransportInvoice((prev) => ({
+                    ...prev,
+                    hasTransportDetails: e.target.checked,
+                  }))
+                }
+              />
+              Enable transport details
+            </label>
+
+            {editTransportInvoice.hasTransportDetails && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Loading Charge
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editTransportInvoice.loadingCharge || ""}
+                    onChange={(e) =>
+                      setEditTransportInvoice((prev) => ({
+                        ...prev,
+                        loadingCharge:
+                          e.target.value === ""
+                            ? ""
+                            : String(Math.max(0, Number(e.target.value))),
+                      }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Transport Charge
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editTransportInvoice.transportCharge || ""}
+                    onChange={(e) =>
+                      setEditTransportInvoice((prev) => ({
+                        ...prev,
+                        transportCharge:
+                          e.target.value === ""
+                            ? ""
+                            : String(Math.max(0, Number(e.target.value))),
+                      }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Freight Charge
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editTransportInvoice.freightCharge || ""}
+                    onChange={(e) =>
+                      setEditTransportInvoice((prev) => ({
+                        ...prev,
+                        freightCharge:
+                          e.target.value === ""
+                            ? ""
+                            : String(Math.max(0, Number(e.target.value))),
+                      }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Transport Notes
+                  </label>
+                  <input
+                    value={editTransportInvoice.transportNotes || ""}
+                    onChange={(e) =>
+                      setEditTransportInvoice((prev) => ({
+                        ...prev,
+                        transportNotes: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setEditTransportInvoice(null)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveTransport}>
+                <Icons.check size={14} /> Save
+              </Button>
+            </div>
           </div>
         )}
       </Modal>
