@@ -1,5 +1,4 @@
 import { supabase } from "../lib/supabase";
-import * as productsService from "./products";
 
 const mapPurchase = (row) => ({
   id: row.id,
@@ -115,18 +114,6 @@ export async function create(purchase) {
       .insert(itemsToInsert);
 
     if (itemsError) throw itemsError;
-
-    for (const item of purchase.items) {
-      const products = await productsService.getAll();
-      const product = products.find((p) => p.id === item.productId);
-
-      if (product) {
-        await productsService.updateStock(
-          item.productId,
-          Number(product.stock ?? 0) + Number(item.qty ?? 0)
-        );
-      }
-    }
   }
 
   const { data: purchaseItems, error: itemFetchError } = await supabase

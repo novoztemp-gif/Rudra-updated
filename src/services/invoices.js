@@ -1,5 +1,5 @@
-import { supabase } from '../lib/supabase';
-import * as productsService from './products';
+import { supabase } from "../lib/supabase";
+import * as productsService from "./products";
 
 const mapInvoice = (row) => ({
   id: row.id,
@@ -9,29 +9,40 @@ const mapInvoice = (row) => ({
   date: row.date,
   deliveryNote: row.delivery_note,
   paymentTerms: row.payment_terms,
+
   subtotal: Number(row.subtotal ?? 0),
   cgst: Number(row.cgst ?? 0),
   sgst: Number(row.sgst ?? 0),
   igst: Number(row.igst ?? 0),
   totalTax: Number(row.total_tax ?? 0),
   total: Number(row.total ?? 0),
+
   hasTransportDetails: row.has_transport_details ?? false,
   loadingCharge: Number(row.loading_charge ?? 0),
   transportCharge: Number(row.transport_charge ?? 0),
   freightCharge: Number(row.freight_charge ?? 0),
   transportNotes: row.transport_notes || "",
+
   overallTaxPercent: Number(row.overall_tax_percent ?? 0),
+
+  advancePaid: Number(row.advance_paid ?? 0),
+  amountDue: Number(row.amount_due ?? Math.max(Number(row.total ?? 0), 0)),
+  paymentStatus: row.payment_status || "pending",
+
   status: row.status,
   jsonConverted: row.json_converted,
   jsonSigned: row.json_signed,
+
   irn: row.irn,
   ackNo: row.ack_no,
   ackDate: row.ack_date,
   signedInvoice: row.signed_invoice,
   signedQRCode: row.signed_qr_code,
   ewayBillId: row.eway_bill_id,
+
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+
   ...(row.eway_bill_details && {
     ewbGenerated: row.eway_bill_details.ewb_generated,
     ewbSigned: row.eway_bill_details.ewb_signed,
@@ -40,12 +51,15 @@ const mapInvoice = (row) => ({
     ewbValidTill: row.eway_bill_details.ewb_valid_till,
     ewbStatus: row.eway_bill_details.ewb_status,
   }),
+
   items: (row.invoice_items || []).map((item) => ({
     id: item.id,
     productId: item.product_id,
     name: item.name,
     hsn: item.hsn,
     unit: item.unit,
+    size: item.size || "",
+    thickness: item.thickness || "",
     qty: Number(item.qty ?? 0),
     rate: Number(item.rate ?? 0),
     taxRate: Number(item.tax_rate ?? 0),
@@ -53,53 +67,80 @@ const mapInvoice = (row) => ({
   })),
 });
 
-const unmapInvoice = (obj) => ({
-  invoice_no: obj.invoiceNo,
-  customer_id: obj.customerId,
-  invoice_type: obj.invoiceType,
-  date: obj.date,
-  delivery_note: obj.deliveryNote,
-  payment_terms: obj.paymentTerms,
-  subtotal: obj.subtotal,
-  cgst: obj.cgst,
-  sgst: obj.sgst,
-  igst: obj.igst,
-  total_tax: obj.totalTax,
-  total: obj.total,
-  has_transport_details: obj.hasTransportDetails ?? false,
-  loading_charge: obj.loadingCharge ?? 0,
-  transport_charge: obj.transportCharge ?? 0,
-  freight_charge: obj.freightCharge ?? 0,
-  transport_notes: obj.transportNotes || "",
-  overall_tax_percent: obj.overallTaxPercent ?? 0,
-  status: obj.status,
-  json_converted: obj.jsonConverted ?? false,
-  json_signed: obj.jsonSigned ?? false,
-  irn: obj.irn,
-  ack_no: obj.ackNo,
-  ack_date: obj.ackDate,
-  signed_invoice: obj.signedInvoice,
-  signed_qr_code: obj.signedQRCode,
-  eway_bill_id: obj.ewayBillId,
-});
+const unmapInvoice = (obj) => {
+  const total = Number(obj.total ?? 0);
+  const advancePaid = Number(obj.advancePaid ?? 0);
+  const amountDue =
+    obj.amountDue !== undefined && obj.amountDue !== null
+      ? Number(obj.amountDue)
+      : Math.max(total - advancePaid, 0);
+
+  const paymentStatus =
+    obj.paymentStatus ||
+    (advancePaid >= total && total > 0
+      ? "paid"
+      : advancePaid > 0
+      ? "partial"
+      : "pending");
+
+  return {
+    invoice_no: obj.invoiceNo,
+    customer_id: obj.customerId,
+    invoice_type: obj.invoiceType,
+    date: obj.date,
+    delivery_note: obj.deliveryNote,
+    payment_terms: obj.paymentTerms,
+
+    subtotal: obj.subtotal,
+    cgst: obj.cgst,
+    sgst: obj.sgst,
+    igst: obj.igst,
+    total_tax: obj.totalTax,
+    total: obj.total,
+
+    has_transport_details: obj.hasTransportDetails ?? false,
+    loading_charge: obj.loadingCharge ?? 0,
+    transport_charge: obj.transportCharge ?? 0,
+    freight_charge: obj.freightCharge ?? 0,
+    transport_notes: obj.transportNotes || "",
+
+    overall_tax_percent: obj.overallTaxPercent ?? 0,
+
+    advance_paid: advancePaid,
+    amount_due: amountDue,
+    payment_status: paymentStatus,
+
+    status: obj.status,
+    json_converted: obj.jsonConverted ?? false,
+    json_signed: obj.jsonSigned ?? false,
+
+    irn: obj.irn,
+    ack_no: obj.ackNo,
+    ack_date: obj.ackDate,
+    signed_invoice: obj.signedInvoice,
+    signed_qr_code: obj.signedQRCode,
+    eway_bill_id: obj.ewayBillId,
+  };
+};
 
 export async function getAll() {
   const { data: invoices, error: invError } = await supabase
-    .from('invoices')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from("invoices")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (invError) throw invError;
 
   const { data: items, error: itemsError } = await supabase
-    .from('invoice_items')
-    .select('*');
+    .from("invoice_items")
+    .select("*")
+    .order("sort_order", { ascending: true });
 
   if (itemsError) throw itemsError;
 
   const { data: ewayBills, error: ewayError } = await supabase
-    .from('eway_bill_details')
-    .select('*');
+    .from("eway_bill_details")
+    .select("*");
 
   if (ewayError) throw ewayError;
 
@@ -125,20 +166,22 @@ export async function getAll() {
 
 export async function create(invoice) {
   const { data: companyData, error: compError } = await supabase
-    .from('companies')
-    .select('id, invoice_seq')
+    .from("companies")
+    .select("id, invoice_seq")
     .limit(1);
 
   if (compError) throw compError;
-  if (!companyData || companyData.length === 0) throw new Error('No company found');
+  if (!companyData || companyData.length === 0) {
+    throw new Error("No company found");
+  }
 
   const company = companyData[0];
   const invoiceNo = String(company.invoice_seq);
 
   await supabase
-    .from('companies')
+    .from("companies")
     .update({ invoice_seq: company.invoice_seq + 1 })
-    .eq('id', company.id);
+    .eq("id", company.id);
 
   const invoiceToInsert = {
     ...unmapInvoice({ ...invoice, invoiceNo }),
@@ -146,19 +189,20 @@ export async function create(invoice) {
   };
 
   const { error: invError } = await supabase
-    .from('invoices')
+    .from("invoices")
     .insert([invoiceToInsert]);
 
   if (invError) throw invError;
 
   const { data: fetchedInvoices, error: fetchError } = await supabase
-    .from('invoices')
-    .select('*')
-    .eq('invoice_no', invoiceNo);
+    .from("invoices")
+    .select("*")
+    .eq("invoice_no", invoiceNo);
 
   if (fetchError) throw fetchError;
+
   if (!fetchedInvoices || fetchedInvoices.length === 0) {
-    throw new Error('Failed to fetch inserted invoice');
+    throw new Error("Failed to fetch inserted invoice");
   }
 
   const newInvoice = fetchedInvoices[0];
@@ -170,15 +214,17 @@ export async function create(invoice) {
       name: item.name,
       hsn: item.hsn,
       unit: item.unit,
-      qty: item.qty,
-      rate: item.rate,
-      tax_rate: item.taxRate ?? 0,
-      amount: item.amount,
+      size: item.size || "",
+      thickness: item.thickness || "",
+      qty: Number(item.qty ?? 0),
+      rate: Number(item.rate ?? 0),
+      tax_rate: Number(item.taxRate ?? 0),
+      amount: Number(item.amount ?? 0),
       sort_order: idx,
     }));
 
     const { error: itemsError } = await supabase
-      .from('invoice_items')
+      .from("invoice_items")
       .insert(itemsToInsert);
 
     if (itemsError) throw itemsError;
@@ -186,16 +232,23 @@ export async function create(invoice) {
     for (const item of invoice.items) {
       const products = await productsService.getAll();
       const prod = products.find((p) => p.id === item.productId);
+
       if (prod) {
-        await productsService.updateStock(item.productId, prod.stock - item.qty);
+        await productsService.updateStock(
+          item.productId,
+          Number(prod.stock ?? 0) - Number(item.qty ?? 0)
+        );
       }
     }
   }
 
-  const { data: invoiceItems } = await supabase
-    .from('invoice_items')
-    .select('*')
-    .eq('invoice_id', newInvoice.id);
+  const { data: invoiceItems, error: itemFetchError } = await supabase
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", newInvoice.id)
+    .order("sort_order", { ascending: true });
+
+  if (itemFetchError) throw itemFetchError;
 
   return mapInvoice({
     ...newInvoice,
@@ -206,7 +259,7 @@ export async function create(invoice) {
 
 export async function updateIRN(id, irnData) {
   const { data, error } = await supabase
-    .from('invoices')
+    .from("invoices")
     .update({
       irn: irnData.irn,
       ack_no: irnData.ackNo,
@@ -215,26 +268,27 @@ export async function updateIRN(id, irnData) {
       signed_qr_code: irnData.signedQRCode,
       json_signed: irnData.jsonSigned ?? true,
     })
-    .eq('id', id)
+    .eq("id", id)
     .select()
     .single();
 
   if (error) throw error;
 
   const { data: invoiceItems } = await supabase
-    .from('invoice_items')
-    .select('*')
-    .eq('invoice_id', id);
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", id)
+    .order("sort_order", { ascending: true });
 
   const { data: ewayBills } = await supabase
-    .from('eway_bill_details')
-    .select('*')
-    .eq('invoice_id', id);
+    .from("eway_bill_details")
+    .select("*")
+    .eq("invoice_id", id);
 
   return mapInvoice({
     ...data,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
+    eway_bill_details: ewayBills && ewayBills.length > 0 ? ewayBills[0] : null,
   });
 }
 
@@ -246,20 +300,22 @@ export async function saveEWBJSON(invoiceId, ewbJson) {
   };
 
   const { data: existing } = await supabase
-    .from('eway_bill_details')
-    .select('id')
-    .eq('invoice_id', invoiceId);
+    .from("eway_bill_details")
+    .select("id")
+    .eq("invoice_id", invoiceId);
 
   if (existing && existing.length > 0) {
     const { error } = await supabase
-      .from('eway_bill_details')
+      .from("eway_bill_details")
       .update(ewbRecord)
-      .eq('invoice_id', invoiceId);
+      .eq("invoice_id", invoiceId);
+
     if (error) throw error;
   } else {
     const { error } = await supabase
-      .from('eway_bill_details')
+      .from("eway_bill_details")
       .insert([ewbRecord]);
+
     if (error) throw error;
   }
 }
@@ -285,111 +341,143 @@ export async function updateEWB(invoiceId, ewbData) {
   };
 
   const { data: existing } = await supabase
-    .from('eway_bill_details')
-    .select('id')
-    .eq('invoice_id', invoiceId);
+    .from("eway_bill_details")
+    .select("id")
+    .eq("invoice_id", invoiceId);
 
   if (existing && existing.length > 0) {
     const { error } = await supabase
-      .from('eway_bill_details')
+      .from("eway_bill_details")
       .update(ewbRecord)
-      .eq('invoice_id', invoiceId);
+      .eq("invoice_id", invoiceId);
+
     if (error) throw error;
   } else {
     const { error } = await supabase
-      .from('eway_bill_details')
+      .from("eway_bill_details")
       .insert([ewbRecord]);
+
     if (error) throw error;
   }
 
   const { data: ewbData2 } = await supabase
-    .from('eway_bill_details')
-    .select('id')
-    .eq('invoice_id', invoiceId);
+    .from("eway_bill_details")
+    .select("id")
+    .eq("invoice_id", invoiceId);
 
   if (ewbData2 && ewbData2.length > 0) {
     await supabase
-      .from('invoices')
+      .from("invoices")
       .update({ eway_bill_id: ewbData2[0].id })
-      .eq('id', invoiceId);
+      .eq("id", invoiceId);
   }
 
   const { data: updatedInv, error: fetchError } = await supabase
-    .from('invoices')
-    .select('*')
-    .eq('id', invoiceId);
+    .from("invoices")
+    .select("*")
+    .eq("id", invoiceId);
 
   if (fetchError) throw fetchError;
-  if (!updatedInv || updatedInv.length === 0) throw new Error('Invoice not found');
+  if (!updatedInv || updatedInv.length === 0) {
+    throw new Error("Invoice not found");
+  }
 
   const inv = updatedInv[0];
 
   const { data: invoiceItems } = await supabase
-    .from('invoice_items')
-    .select('*')
-    .eq('invoice_id', invoiceId);
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .order("sort_order", { ascending: true });
 
   const { data: ewayBills } = await supabase
-    .from('eway_bill_details')
-    .select('*')
-    .eq('invoice_id', invoiceId);
+    .from("eway_bill_details")
+    .select("*")
+    .eq("invoice_id", invoiceId);
 
   return mapInvoice({
     ...inv,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
+    eway_bill_details: ewayBills && ewayBills.length > 0 ? ewayBills[0] : null,
   });
 }
 
 export async function update(id, changes) {
   const updateData = {};
 
-  if ('invoiceNo' in changes) updateData.invoice_no = changes.invoiceNo;
-  if ('customerId' in changes) updateData.customer_id = changes.customerId;
-  if ('invoiceType' in changes) updateData.invoice_type = changes.invoiceType;
-  if ('date' in changes) updateData.date = changes.date;
-  if ('deliveryNote' in changes) updateData.delivery_note = changes.deliveryNote;
-  if ('paymentTerms' in changes) updateData.payment_terms = changes.paymentTerms;
-  if ('subtotal' in changes) updateData.subtotal = changes.subtotal;
-  if ('cgst' in changes) updateData.cgst = changes.cgst;
-  if ('sgst' in changes) updateData.sgst = changes.sgst;
-  if ('igst' in changes) updateData.igst = changes.igst;
-  if ('totalTax' in changes) updateData.total_tax = changes.totalTax;
-  if ('total' in changes) updateData.total = changes.total;
-  if ('hasTransportDetails' in changes) updateData.has_transport_details = changes.hasTransportDetails;
-  if ('loadingCharge' in changes) updateData.loading_charge = changes.loadingCharge;
-  if ('transportCharge' in changes) updateData.transport_charge = changes.transportCharge;
-  if ('freightCharge' in changes) updateData.freight_charge = changes.freightCharge;
-  if ('transportNotes' in changes) updateData.transport_notes = changes.transportNotes;
-  if ('overallTaxPercent' in changes) updateData.overall_tax_percent = changes.overallTaxPercent;
-  if ('status' in changes) updateData.status = changes.status;
-  if ('jsonConverted' in changes) updateData.json_converted = changes.jsonConverted;
+  if ("invoiceNo" in changes) updateData.invoice_no = changes.invoiceNo;
+  if ("customerId" in changes) updateData.customer_id = changes.customerId;
+  if ("invoiceType" in changes) updateData.invoice_type = changes.invoiceType;
+  if ("date" in changes) updateData.date = changes.date;
+  if ("deliveryNote" in changes) updateData.delivery_note = changes.deliveryNote;
+  if ("paymentTerms" in changes) updateData.payment_terms = changes.paymentTerms;
+
+  if ("subtotal" in changes) updateData.subtotal = changes.subtotal;
+  if ("cgst" in changes) updateData.cgst = changes.cgst;
+  if ("sgst" in changes) updateData.sgst = changes.sgst;
+  if ("igst" in changes) updateData.igst = changes.igst;
+  if ("totalTax" in changes) updateData.total_tax = changes.totalTax;
+  if ("total" in changes) updateData.total = changes.total;
+
+  if ("hasTransportDetails" in changes) {
+    updateData.has_transport_details = changes.hasTransportDetails;
+  }
+  if ("loadingCharge" in changes) {
+    updateData.loading_charge = changes.loadingCharge;
+  }
+  if ("transportCharge" in changes) {
+    updateData.transport_charge = changes.transportCharge;
+  }
+  if ("freightCharge" in changes) {
+    updateData.freight_charge = changes.freightCharge;
+  }
+  if ("transportNotes" in changes) {
+    updateData.transport_notes = changes.transportNotes;
+  }
+
+  if ("overallTaxPercent" in changes) {
+    updateData.overall_tax_percent = changes.overallTaxPercent;
+  }
+
+  if ("advancePaid" in changes) {
+    updateData.advance_paid = changes.advancePaid;
+  }
+  if ("amountDue" in changes) {
+    updateData.amount_due = changes.amountDue;
+  }
+  if ("paymentStatus" in changes) {
+    updateData.payment_status = changes.paymentStatus;
+  }
+
+  if ("status" in changes) updateData.status = changes.status;
+  if ("jsonConverted" in changes) updateData.json_converted = changes.jsonConverted;
 
   const { data, error } = await supabase
-    .from('invoices')
+    .from("invoices")
     .update(updateData)
-    .eq('id', id)
+    .eq("id", id)
     .select();
 
   if (error) throw error;
-  if (!data || data.length === 0) throw new Error('Invoice not found');
+  if (!data || data.length === 0) throw new Error("Invoice not found");
 
   const updatedInv = data[0];
 
   const { data: invoiceItems } = await supabase
-    .from('invoice_items')
-    .select('*')
-    .eq('invoice_id', id);
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", id)
+    .order("sort_order", { ascending: true });
 
   const { data: ewayBills } = await supabase
-    .from('eway_bill_details')
-    .select('*')
-    .eq('invoice_id', id);
+    .from("eway_bill_details")
+    .select("*")
+    .eq("invoice_id", id);
 
   return mapInvoice({
     ...updatedInv,
     invoice_items: invoiceItems || [],
-    eway_bill_details: (ewayBills && ewayBills.length > 0) ? ewayBills[0] : null,
+    eway_bill_details: ewayBills && ewayBills.length > 0 ? ewayBills[0] : null,
   });
 }
 
@@ -397,8 +485,8 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
   const results = { successful: [], failed: [], errors: [] };
 
   const decodeJWT = (token) => {
-    const parts = token.split('.');
-    const decoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const parts = token.split(".");
+    const decoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const jsonStr = atob(decoded);
     return JSON.parse(jsonStr);
   };
@@ -406,7 +494,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
   for (const item of signedResponseArray) {
     try {
       if (!item.SignedInvoice) {
-        const err = 'Missing SignedInvoice field';
+        const err = "Missing SignedInvoice field";
         results.failed.push({ item, error: err });
         results.errors.push(err);
         continue;
@@ -416,18 +504,19 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
       const invoiceNo = decodedPayload?.Data?.Doc?.Num;
 
       if (!invoiceNo) {
-        const err = 'Could not extract invoice number from SignedInvoice';
+        const err = "Could not extract invoice number from SignedInvoice";
         results.failed.push({ item, error: err });
         results.errors.push(err);
         continue;
       }
 
       const { data: invoices, error: findError } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('invoice_no', invoiceNo.toString());
+        .from("invoices")
+        .select("id")
+        .eq("invoice_no", invoiceNo.toString());
 
       if (findError) throw findError;
+
       if (!invoices || invoices.length === 0) {
         const err = `Invoice #${invoiceNo} not found in system`;
         results.failed.push({ invoiceNo, error: err });
@@ -438,7 +527,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
       const invoiceId = invoices[0].id;
 
       const { error: updateError } = await supabase
-        .from('invoices')
+        .from("invoices")
         .update({
           irn: item.Irn,
           ack_no: item.AckNo,
@@ -447,7 +536,7 @@ export async function bulkImportSignedInvoices(signedResponseArray) {
           signed_qr_code: item.SignedQRCode,
           json_signed: true,
         })
-        .eq('id', invoiceId);
+        .eq("id", invoiceId);
 
       if (updateError) throw updateError;
 

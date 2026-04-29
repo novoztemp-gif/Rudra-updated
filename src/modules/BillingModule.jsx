@@ -164,9 +164,8 @@ const ProductSearchDropdown = ({
                     setProductSearch(p.name || "");
                     setOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50 ${
-                    active ? "bg-gray-100" : ""
-                  }`}
+                  className={`w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50 ${active ? "bg-gray-100" : ""
+                    }`}
                 >
                   <div className="text-sm font-medium text-gray-900">
                     {p.name}
@@ -339,6 +338,8 @@ export const InvoiceCreator = ({
           productId: product.id,
           name: product.name,
           hsn: product.hsn,
+          size: product.size || "",
+          thickness: product.thickness || "",
           qty,
           rate,
           unit: product.unit,
@@ -461,8 +462,7 @@ export const InvoiceCreator = ({
       setEditOverallTax(false);
 
       showToast?.(
-        `${
-          fixedInvoiceType === "retail" ? "Retail Bill" : "Invoice"
+        `${fixedInvoiceType === "retail" ? "Retail Bill" : "Invoice"
         } #${createdInvoice.invoiceNo} created successfully`,
         "success"
       );
@@ -496,9 +496,8 @@ export const InvoiceCreator = ({
   return (
     <div className="space-y-4">
       <Card
-        title={`New ${
-          fixedInvoiceType === "retail" ? "Retail Bill" : "Tax Invoice"
-        } #${nextInvoiceNo}`}
+        title={`New ${fixedInvoiceType === "retail" ? "Retail Bill" : "Tax Invoice"
+          } #${nextInvoiceNo}`}
       >
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
@@ -683,9 +682,8 @@ export const InvoiceCreator = ({
 
             <div className="sm:col-span-1 lg:col-span-2">
               <Input
-                label={`Quantity ${
-                  selectedProduct ? `(${selectedProduct.unit})` : ""
-                }`}
+                label={`Quantity ${selectedProduct ? `(${selectedProduct.unit})` : ""
+                  }`}
                 type="number"
                 min="0"
                 value={itemForm.qty}
@@ -993,24 +991,23 @@ const InvoiceList = ({ invoices, customers, onView, setInvoices, showToast }) =>
             prev.map((inv) =>
               inv.id === invoiceId
                 ? {
-                    ...inv,
-                    irn: response.Irn,
-                    ackNo: response.AckNo,
-                    ackDate: response.AckDt,
-                    status: response.Status || "ACT",
-                    signedInvoice: response.SignedInvoice,
-                    signedQRCode: response.SignedQRCode,
-                    ewbNo: response.EwbNo,
-                    ewbDt: response.EwbDt,
-                    jsonSigned: true,
-                  }
+                  ...inv,
+                  irn: response.Irn,
+                  ackNo: response.AckNo,
+                  ackDate: response.AckDt,
+                  status: response.Status || "ACT",
+                  signedInvoice: response.SignedInvoice,
+                  signedQRCode: response.SignedQRCode,
+                  ewbNo: response.EwbNo,
+                  ewbDt: response.EwbDt,
+                  jsonSigned: true,
+                }
                 : inv
             )
           );
 
           showToast?.(
-            `Invoice #${
-              invoices.find((i) => i.id === invoiceId)?.invoiceNo
+            `Invoice #${invoices.find((i) => i.id === invoiceId)?.invoiceNo
             } updated with IRN`,
             "success"
           );
@@ -1725,53 +1722,53 @@ export const RetailCustomerBillView = ({ invoice, company, customer }) => {
           transportCharge > 0 ||
           freightCharge > 0 ||
           invoice.transportNotes) && (
-          <div className="p-4 border-t text-xs space-y-1">
-            {!isInterState ? (
-              <>
+            <div className="p-4 border-t text-xs space-y-1">
+              {!isInterState ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>CGST ({overallTaxPercent / 2}%)</span>
+                    <span>{formatCurrency(cgst)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>SGST ({overallTaxPercent / 2}%)</span>
+                    <span>{formatCurrency(sgst)}</span>
+                  </div>
+                </>
+              ) : (
                 <div className="flex justify-between">
-                  <span>CGST ({overallTaxPercent / 2}%)</span>
-                  <span>{formatCurrency(cgst)}</span>
+                  <span>IGST ({overallTaxPercent}%)</span>
+                  <span>{formatCurrency(igst)}</span>
                 </div>
+              )}
+
+              {loadingCharge > 0 && (
                 <div className="flex justify-between">
-                  <span>SGST ({overallTaxPercent / 2}%)</span>
-                  <span>{formatCurrency(sgst)}</span>
+                  <span>Loading Charge</span>
+                  <span>{formatCurrency(loadingCharge)}</span>
                 </div>
-              </>
-            ) : (
-              <div className="flex justify-between">
-                <span>IGST ({overallTaxPercent}%)</span>
-                <span>{formatCurrency(igst)}</span>
-              </div>
-            )}
+              )}
 
-            {loadingCharge > 0 && (
-              <div className="flex justify-between">
-                <span>Loading Charge</span>
-                <span>{formatCurrency(loadingCharge)}</span>
-              </div>
-            )}
+              {transportCharge > 0 && (
+                <div className="flex justify-between">
+                  <span>Transport Charge</span>
+                  <span>{formatCurrency(transportCharge)}</span>
+                </div>
+              )}
 
-            {transportCharge > 0 && (
-              <div className="flex justify-between">
-                <span>Transport Charge</span>
-                <span>{formatCurrency(transportCharge)}</span>
-              </div>
-            )}
+              {freightCharge > 0 && (
+                <div className="flex justify-between">
+                  <span>Freight Charge</span>
+                  <span>{formatCurrency(freightCharge)}</span>
+                </div>
+              )}
 
-            {freightCharge > 0 && (
-              <div className="flex justify-between">
-                <span>Freight Charge</span>
-                <span>{formatCurrency(freightCharge)}</span>
-              </div>
-            )}
-
-            {invoice.transportNotes && (
-              <div className="pt-2 text-gray-600">
-                <strong>Notes:</strong> {invoice.transportNotes}
-              </div>
-            )}
-          </div>
-        )}
+              {invoice.transportNotes && (
+                <div className="pt-2 text-gray-600">
+                  <strong>Notes:</strong> {invoice.transportNotes}
+                </div>
+              )}
+            </div>
+          )}
 
         <div className="p-4 border-t text-right text-sm">
           <div>
@@ -1813,6 +1810,8 @@ export const RetailCompanyBillView = ({ invoice, company, customer }) => {
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-3 py-2 text-left">Product Name</th>
+              <th className="px-3 py-2 text-left">Size</th>
+              <th className="px-3 py-2 text-left">Thickness</th>
               <th className="px-3 py-2 text-right">Quantity</th>
             </tr>
           </thead>
@@ -1821,6 +1820,8 @@ export const RetailCompanyBillView = ({ invoice, company, customer }) => {
             {invoice.items.map((item, idx) => (
               <tr key={idx} className="border-b">
                 <td className="px-3 py-2">{item.name}</td>
+                <td className="px-3 py-2">{item.size || "—"}</td>
+                <td className="px-3 py-2">{item.thickness || "—"}</td>
                 <td className="px-3 py-2 text-right">
                   {item.qty} {item.unit}
                 </td>

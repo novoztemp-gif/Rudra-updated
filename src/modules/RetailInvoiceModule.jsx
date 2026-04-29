@@ -96,120 +96,110 @@ const printHtmlInIframe = (html) => {
         <title></title>
         <style>
           @page {
-            size: auto;
-            margin: 10mm;
+            size: 80mm auto;
+            margin: 3mm;
           }
 
           * {
             box-sizing: border-box;
           }
 
+          html,
           body {
             margin: 0;
             padding: 0;
             background: #ffffff;
             font-family: Arial, sans-serif;
             color: #111827;
-            font-size: 11px;
+            font-size: 10px;
+            line-height: 1.35;
           }
 
           .bill-wrap {
-            width: 100%;
-            max-width: 760px;
+            width: 74mm;
+            max-width: 74mm;
             margin: 0 auto;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            overflow: hidden;
-            background: #fff;
+            background: #ffffff;
           }
 
-          .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            border-bottom: 1px solid #cbd5e1;
+          .bill-line {
+            border-top: 1px dashed #111827;
+            margin: 6px 0;
           }
 
-          .info-box {
-            padding: 10px 12px;
-            line-height: 1.45;
+          .bill-info {
+            padding-bottom: 4px;
           }
 
-          .info-box:first-child {
-            border-right: 1px solid #cbd5e1;
+          .bill-info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 2px;
           }
 
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-            font-size: 11px;
+          .bill-info-label {
+            font-weight: 700;
+            white-space: nowrap;
           }
 
-          thead {
-            background: #f8fafc;
-          }
-
-          th,
-          td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #e5e7eb;
-            vertical-align: top;
+          .bill-info-value {
+            text-align: right;
             word-break: break-word;
             overflow-wrap: anywhere;
           }
 
-          th {
+          .customer-box {
+            margin-top: 4px;
+          }
+
+          .item {
+            padding: 5px 0;
+            border-bottom: 1px dashed #cbd5e1;
+          }
+
+          .item-name {
             font-weight: 700;
-            text-align: left;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            margin-bottom: 2px;
           }
 
-          .text-right {
+          .item-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 9.5px;
+          }
+
+          .item-left {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+          }
+
+          .item-right {
             text-align: right;
+            white-space: nowrap;
+            font-weight: 700;
           }
 
-          .product-col {
-            width: 46%;
+          .company-meta {
+            margin-top: 2px;
+            color: #374151;
+            font-size: 9.5px;
+            word-break: break-word;
+            overflow-wrap: anywhere;
           }
 
-          .qty-col {
-            width: 14%;
-          }
-
-          .rate-col {
-            width: 20%;
-          }
-
-          .amount-col {
-            width: 20%;
-          }
-
-          .company-product-col {
-            width: 70%;
-          }
-
-          .company-qty-col {
-            width: 30%;
-          }
-
-          .summary-section {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 260px;
-            gap: 12px;
-            padding: 10px 12px;
-            border-top: 1px solid #cbd5e1;
-            font-size: 11px;
-          }
-
-          .summary-box {
-            width: 100%;
+          .summary {
+            padding-top: 5px;
           }
 
           .summary-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 12px;
-            margin-bottom: 4px;
-            align-items: start;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 3px;
           }
 
           .summary-label {
@@ -221,28 +211,37 @@ const printHtmlInIframe = (html) => {
             white-space: nowrap;
           }
 
-          .notes-box {
-            line-height: 1.45;
+          .notes {
+            margin-top: 5px;
             word-break: break-word;
             overflow-wrap: anywhere;
           }
 
           .total-box {
-            padding: 12px;
-            text-align: right;
-            font-size: 13px;
+            border-top: 1px dashed #111827;
+            border-bottom: 1px dashed #111827;
+            padding: 6px 0;
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
             font-weight: 700;
-            border-top: 1px solid #cbd5e1;
+          }
+
+          .footer-space {
+            height: 8px;
           }
 
           @media print {
+            html,
             body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
+              width: 80mm;
             }
 
             .bill-wrap {
-              max-width: 100%;
+              width: 74mm;
+              max-width: 74mm;
               page-break-inside: avoid;
             }
           }
@@ -265,19 +264,6 @@ const printHtmlInIframe = (html) => {
 };
 
 const buildCustomerBillHTML = (invoice, company, customer) => {
-  const rows = invoice.items
-    .map(
-      (item) => `
-        <tr>
-          <td>${escapeHtml(item.name)}</td>
-          <td class="text-right">${escapeHtml(item.qty)}</td>
-          <td class="text-right">${formatCurrency(item.rate)}</td>
-          <td class="text-right">${formatCurrency(item.amount)}</td>
-        </tr>
-      `
-    )
-    .join("");
-
   const isInterState = customer?.state !== company.stateCode;
   const totalTax = Number(invoice.totalTax || 0);
   const overallTaxPercent = Number(invoice.overallTaxPercent || 0);
@@ -288,12 +274,26 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
   const loadingCharge = Number(invoice.loadingCharge || 0);
   const transportCharge = Number(invoice.transportCharge || 0);
   const freightCharge = Number(invoice.freightCharge || 0);
-  const hasSummary =
-    overallTaxPercent > 0 ||
-    loadingCharge > 0 ||
-    transportCharge > 0 ||
-    freightCharge > 0 ||
-    !!invoice.transportNotes;
+
+  const rows = invoice.items
+    .map((item) => {
+      const qtyText = `${item.qty} ${item.unit || ""}`.trim();
+      const rateText = formatCurrency(item.rate);
+      const amountText = formatCurrency(item.amount);
+
+      return `
+        <div class="item">
+          <div class="item-name">${escapeHtml(item.name)}</div>
+          <div class="item-meta">
+            <div class="item-left">
+              Qty: ${escapeHtml(qtyText)} × ${rateText}
+            </div>
+            <div class="item-right">${amountText}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 
   const taxRows =
     overallTaxPercent > 0
@@ -321,7 +321,7 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       loadingCharge > 0
         ? `
           <div class="summary-row">
-            <div class="summary-label">Loading Charge</div>
+            <div class="summary-label">Loading</div>
             <div class="summary-value">${formatCurrency(loadingCharge)}</div>
           </div>
         `
@@ -331,7 +331,7 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       transportCharge > 0
         ? `
           <div class="summary-row">
-            <div class="summary-label">Transport Charge</div>
+            <div class="summary-label">Transport</div>
             <div class="summary-value">${formatCurrency(transportCharge)}</div>
           </div>
         `
@@ -341,7 +341,7 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       freightCharge > 0
         ? `
           <div class="summary-row">
-            <div class="summary-label">Freight Charge</div>
+            <div class="summary-label">Freight</div>
             <div class="summary-value">${formatCurrency(freightCharge)}</div>
           </div>
         `
@@ -349,96 +349,123 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
     }
   `;
 
+  const hasSummary =
+    overallTaxPercent > 0 ||
+    loadingCharge > 0 ||
+    transportCharge > 0 ||
+    freightCharge > 0 ||
+    !!invoice.transportNotes;
+
   return `
     <div class="bill-wrap">
-      <div class="info-grid">
-        <div class="info-box">
-          <div><strong>Invoice No:</strong> ${escapeHtml(invoice.invoiceNo)}</div>
-          <div><strong>Date:</strong> ${formatDate(invoice.date)}</div>
+      <div class="bill-info">
+        <div class="bill-info-row">
+          <div class="bill-info-label">Invoice No</div>
+          <div class="bill-info-value">${escapeHtml(invoice.invoiceNo)}</div>
         </div>
-        <div class="info-box">
-          <div><strong>Customer:</strong> ${escapeHtml(customer?.name || "—")}</div>
-          <div><strong>Phone:</strong> ${escapeHtml(customer?.mobile || "—")}</div>
+        <div class="bill-info-row">
+          <div class="bill-info-label">Date</div>
+          <div class="bill-info-value">${formatDate(invoice.date)}</div>
+        </div>
+
+        <div class="customer-box">
+          <div class="bill-info-row">
+            <div class="bill-info-label">Customer</div>
+            <div class="bill-info-value">${escapeHtml(customer?.name || "—")}</div>
+          </div>
+          <div class="bill-info-row">
+            <div class="bill-info-label">Phone</div>
+            <div class="bill-info-value">${escapeHtml(customer?.mobile || "—")}</div>
+          </div>
         </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th class="product-col">Product</th>
-            <th class="qty-col text-right">Qty</th>
-            <th class="rate-col text-right">Rate</th>
-            <th class="amount-col text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+      <div class="bill-line"></div>
+
+      ${rows}
 
       ${
         hasSummary
           ? `
-            <div class="summary-section">
-              <div class="notes-box">
-                ${
-                  invoice.transportNotes
-                    ? `<strong>Notes:</strong> ${escapeHtml(invoice.transportNotes)}`
-                    : ""
-                }
-              </div>
-              <div class="summary-box">
-                ${taxRows}
-                ${chargeRows}
-              </div>
+            <div class="summary">
+              ${taxRows}
+              ${chargeRows}
+              ${
+                invoice.transportNotes
+                  ? `<div class="notes"><strong>Notes:</strong> ${escapeHtml(
+                      invoice.transportNotes
+                    )}</div>`
+                  : ""
+              }
             </div>
           `
           : ""
       }
 
       <div class="total-box">
-        Total: ${formatCurrency(invoice.total)}
+        <div>Total</div>
+        <div>${formatCurrency(invoice.total)}</div>
       </div>
+
+      <div class="footer-space"></div>
     </div>
   `;
 };
 
 const buildCompanyBillHTML = (invoice, company, customer) => {
   const rows = invoice.items
-    .map(
-      (item) => `
-        <tr>
-          <td>${escapeHtml(item.name)}</td>
-          <td class="text-right">${escapeHtml(item.qty)} ${escapeHtml(item.unit)}</td>
-        </tr>
-      `
-    )
+    .map((item) => {
+      const qtyText = `${item.qty} ${item.unit || ""}`.trim();
+      const sizeText = item.size ? `Size: ${item.size}` : "";
+      const thicknessText = item.thickness ? `Thickness: ${item.thickness}` : "";
+      const detailText = [sizeText, thicknessText].filter(Boolean).join(" | ");
+
+      return `
+        <div class="item">
+          <div class="item-name">${escapeHtml(item.name)}</div>
+          ${
+            detailText
+              ? `<div class="company-meta">${escapeHtml(detailText)}</div>`
+              : `<div class="company-meta">Size: — | Thickness: —</div>`
+          }
+          <div class="item-meta">
+            <div class="item-left">Quantity</div>
+            <div class="item-right">${escapeHtml(qtyText)}</div>
+          </div>
+        </div>
+      `;
+    })
     .join("");
 
   return `
     <div class="bill-wrap">
-      <div class="info-grid">
-        <div class="info-box">
-          <div><strong>Invoice No:</strong> ${escapeHtml(invoice.invoiceNo)}</div>
-          <div><strong>Date:</strong> ${formatDate(invoice.date)}</div>
+      <div class="bill-info">
+        <div class="bill-info-row">
+          <div class="bill-info-label">Invoice No</div>
+          <div class="bill-info-value">${escapeHtml(invoice.invoiceNo)}</div>
         </div>
-        <div class="info-box">
-          <div><strong>Customer:</strong> ${escapeHtml(customer?.name || "—")}</div>
-          <div><strong>Phone:</strong> ${escapeHtml(customer?.mobile || "—")}</div>
+        <div class="bill-info-row">
+          <div class="bill-info-label">Date</div>
+          <div class="bill-info-value">${formatDate(invoice.date)}</div>
+        </div>
+
+        <div class="customer-box">
+          <div class="bill-info-row">
+            <div class="bill-info-label">Customer</div>
+            <div class="bill-info-value">${escapeHtml(customer?.name || "—")}</div>
+          </div>
+          <div class="bill-info-row">
+            <div class="bill-info-label">Phone</div>
+            <div class="bill-info-value">${escapeHtml(customer?.mobile || "—")}</div>
+          </div>
         </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th class="company-product-col">Product Name</th>
-            <th class="company-qty-col text-right">Quantity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+      <div class="bill-line"></div>
+
+      ${rows}
+
+      <div class="footer-space"></div>
     </div>
   `;
 };

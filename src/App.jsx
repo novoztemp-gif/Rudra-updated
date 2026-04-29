@@ -28,6 +28,7 @@ import { ReportsModule } from "./modules/ReportsModule";
 import { PurchaseModule } from "./modules/PurchaseModule";
 import { InventoryModule } from "./modules/InventoryModule";
 import { RetailInvoiceModule } from "./modules/RetailInvoiceModule";
+import { AdvanceModule } from "./modules/AdvanceModule";
 import { DispatchModule } from "./modules/DispatchModule";
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP LAYOUT
@@ -35,6 +36,7 @@ import { DispatchModule } from "./modules/DispatchModule";
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: Icons.home },
   { key: "retail", label: "Retail Invoice", icon: Icons.receipt },
+  { key: "advance", label: "Advance", icon: Icons.receipt },
   { key: "inventory", label: "Inventory", icon: Icons.box },
   { key: "purchase", label: "Purchase", icon: Icons.cart },
   { key: "customers", label: "Parties", icon: Icons.users },
@@ -278,53 +280,53 @@ export default function App() {
   };
 
   const setInvoices = async (updater) => {
-    const prev = invoices;
-    const rawNext = typeof updater === "function" ? updater(prev) : updater;
+  const prev = invoices;
+  const rawNext = typeof updater === "function" ? updater(prev) : updater;
 
-    const skipIds = new Set(
-      rawNext.filter((item) => item?.__skipSync).map((item) => item.id)
-    );
+  const skipIds = new Set(
+    rawNext.filter((item) => item?.__skipSync).map((item) => item.id)
+  );
 
-    const next = rawNext.map((item) => {
-      const { __skipSync, ...clean } = item;
-      return clean;
-    });
+  const next = rawNext.map((item) => {
+    const { __skipSync, ...clean } = item;
+    return clean;
+  });
 
-    const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
-    const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
+  const prevMap = Object.fromEntries(prev.map((i) => [i.id, i]));
+  const nextMap = Object.fromEntries(next.map((i) => [i.id, i]));
 
-    try {
-      for (const item of next) {
-        if (!prevMap[item.id]) {
-          if (!skipIds.has(item.id)) {
-            await invoicesService.create(item);
-          }
-        } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
-          const changes = {};
+  try {
+    for (const item of next) {
+      if (skipIds.has(item.id)) continue;
 
-          if (item.irn !== prevMap[item.id].irn) {
-            changes.irn = item.irn;
-            changes.ackNo = item.ackNo;
-            changes.ackDate = item.ackDate;
-            changes.signedInvoice = item.signedInvoice;
-            changes.signedQRCode = item.signedQRCode;
-            changes.jsonSigned = item.jsonSigned;
-            await invoicesService.updateIRN(item.id, changes);
-          } else if (item.ewayBillId !== prevMap[item.id].ewayBillId) {
-            await invoicesService.updateEWB(item.id, item);
-          } else {
-            await invoicesService.update(item.id, item);
-          }
+      if (!prevMap[item.id]) {
+        await invoicesService.create(item);
+      } else if (JSON.stringify(item) !== JSON.stringify(prevMap[item.id])) {
+        const changes = {};
+
+        if (item.irn !== prevMap[item.id].irn) {
+          changes.irn = item.irn;
+          changes.ackNo = item.ackNo;
+          changes.ackDate = item.ackDate;
+          changes.signedInvoice = item.signedInvoice;
+          changes.signedQRCode = item.signedQRCode;
+          changes.jsonSigned = item.jsonSigned;
+          await invoicesService.updateIRN(item.id, changes);
+        } else if (item.ewayBillId !== prevMap[item.id].ewayBillId) {
+          await invoicesService.updateEWB(item.id, item);
+        } else {
+          await invoicesService.update(item.id, item);
         }
       }
-    } catch (err) {
-      console.error("Invoice save error:", err);
-      setError(err.message);
-      return;
     }
+  } catch (err) {
+    console.error("Invoice save error:", err);
+    setError(err.message);
+    return;
+  }
 
-    _setInvoices(next);
-  };
+  _setInvoices(next);
+};
 
   const setDispatches = async (updater) => {
     const prev = dispatches;
@@ -482,6 +484,18 @@ export default function App() {
           />
         );
 
+      case "advance":
+        return (
+          <AdvanceModule
+            invoices={invoices}
+            customers={customers}
+            setInvoices={setInvoices}
+            showToast={showToast}
+          />
+        );
+
+      
+
       case "inventory":
         return <InventoryModule products={products} showToast={showToast} setProducts={setProducts} />;
 
@@ -624,8 +638,8 @@ export default function App() {
                   key={item.key}
                   onClick={() => navigate(item.key)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all ${isActive
-                      ? "bg-gray-100 text-gray-900 font-semibold"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                    ? "bg-gray-100 text-gray-900 font-semibold"
+                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                 >
                   <IconComp
