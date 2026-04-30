@@ -21,9 +21,8 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
             {columns.map((col, idx) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${
-                  idx !== columns.length - 1 ? "border-r border-gray-200" : ""
-                } ${col.align === "right" ? "text-right" : ""}`}
+                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${idx !== columns.length - 1 ? "border-r border-gray-200" : ""
+                  } ${col.align === "right" ? "text-right" : ""}`}
               >
                 {col.label}
               </th>
@@ -49,11 +48,10 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
                 {columns.map((col, colIndex) => (
                   <td
                     key={col.key}
-                    className={`px-4 py-3 border-b border-gray-100 ${
-                      colIndex !== columns.length - 1
-                        ? "border-r border-gray-100"
-                        : ""
-                    } ${col.align === "right" ? "text-right" : ""}`}
+                    className={`px-4 py-3 border-b border-gray-100 ${colIndex !== columns.length - 1
+                      ? "border-r border-gray-100"
+                      : ""
+                      } ${col.align === "right" ? "text-right" : ""}`}
                   >
                     {col.render ? col.render(row, rowIndex) : row[col.key]}
                   </td>
@@ -96,9 +94,9 @@ const printHtmlInIframe = (html) => {
         <title></title>
         <style>
           @page {
-            size: 80mm auto;
-            margin: 3mm;
-          }
+               size: 3in auto;
+               margin: 0.08in;
+            }
 
           * {
             box-sizing: border-box;
@@ -116,11 +114,11 @@ const printHtmlInIframe = (html) => {
           }
 
           .bill-wrap {
-            width: 74mm;
-            max-width: 74mm;
-            margin: 0 auto;
-            background: #ffffff;
-          }
+              width: 2.84in;
+              max-width: 2.84in;
+              margin: 0 auto;
+              background: #ffffff;
+            }
 
           .bill-line {
             border-top: 1px dashed #111827;
@@ -236,13 +234,13 @@ const printHtmlInIframe = (html) => {
           @media print {
             html,
             body {
-              width: 80mm;
-            }
+                width: 3in;
+              }
 
             .bill-wrap {
-              width: 74mm;
-              max-width: 74mm;
-              page-break-inside: avoid;
+                width: 2.84in;
+                max-width: 2.84in;
+                page-break-inside: avoid;
             }
           }
         </style>
@@ -256,10 +254,13 @@ const printHtmlInIframe = (html) => {
 
   setTimeout(() => {
     iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-    setTimeout(() => {
+    
+    // Listen for when the print dialog is closed (either printed or cancelled)
+    iframe.contentWindow.onafterprint = () => {
       document.body.removeChild(iframe);
-    }, 1000);
+    };
+
+    iframe.contentWindow.print();
   }, 400);
 };
 
@@ -317,35 +318,32 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
       : "";
 
   const chargeRows = `
-    ${
-      loadingCharge > 0
-        ? `
+    ${loadingCharge > 0
+      ? `
           <div class="summary-row">
             <div class="summary-label">Loading</div>
             <div class="summary-value">${formatCurrency(loadingCharge)}</div>
           </div>
         `
-        : ""
+      : ""
     }
-    ${
-      transportCharge > 0
-        ? `
+    ${transportCharge > 0
+      ? `
           <div class="summary-row">
             <div class="summary-label">Transport</div>
             <div class="summary-value">${formatCurrency(transportCharge)}</div>
           </div>
         `
-        : ""
+      : ""
     }
-    ${
-      freightCharge > 0
-        ? `
+    ${freightCharge > 0
+      ? `
           <div class="summary-row">
             <div class="summary-label">Freight</div>
             <div class="summary-value">${formatCurrency(freightCharge)}</div>
           </div>
         `
-        : ""
+      : ""
     }
   `;
 
@@ -384,23 +382,21 @@ const buildCustomerBillHTML = (invoice, company, customer) => {
 
       ${rows}
 
-      ${
-        hasSummary
-          ? `
+      ${hasSummary
+      ? `
             <div class="summary">
               ${taxRows}
               ${chargeRows}
-              ${
-                invoice.transportNotes
-                  ? `<div class="notes"><strong>Notes:</strong> ${escapeHtml(
-                      invoice.transportNotes
-                    )}</div>`
-                  : ""
-              }
+              ${invoice.transportNotes
+        ? `<div class="notes"><strong>Notes:</strong> ${escapeHtml(
+          invoice.transportNotes
+        )}</div>`
+        : ""
+      }
             </div>
           `
-          : ""
-      }
+      : ""
+    }
 
       <div class="total-box">
         <div>Total</div>
@@ -423,11 +419,10 @@ const buildCompanyBillHTML = (invoice, company, customer) => {
       return `
         <div class="item">
           <div class="item-name">${escapeHtml(item.name)}</div>
-          ${
-            detailText
-              ? `<div class="company-meta">${escapeHtml(detailText)}</div>`
-              : `<div class="company-meta">Size: — | Thickness: —</div>`
-          }
+          ${detailText
+          ? `<div class="company-meta">${escapeHtml(detailText)}</div>`
+          : `<div class="company-meta">Size: — | Thickness: —</div>`
+        }
           <div class="item-meta">
             <div class="item-left">Quantity</div>
             <div class="item-right">${escapeHtml(qtyText)}</div>
