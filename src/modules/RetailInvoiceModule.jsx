@@ -94,8 +94,8 @@ const printHtmlInIframe = (html) => {
         <title></title>
         <style>
           @page {
-               size: 3in auto;
-               margin: 0.08in;
+               size: A5 portrait;
+               margin: 8mm;
             }
 
           * {
@@ -109,13 +109,13 @@ const printHtmlInIframe = (html) => {
             background: #ffffff;
             font-family: Arial, sans-serif;
             color: #111827;
-            font-size: 10px;
+            font-size: 12px;
             line-height: 1.35;
           }
 
           .bill-wrap {
-              width: 2.84in;
-              max-width: 2.84in;
+              width: 100%;
+              max-width: 132mm;
               margin: 0 auto;
               background: #ffffff;
             }
@@ -166,8 +166,8 @@ const printHtmlInIframe = (html) => {
           .item-meta {
             display: flex;
             justify-content: space-between;
-            gap: 6px;
-            font-size: 9.5px;
+            gap: 10px;
+            font-size: 11px;
           }
 
           .item-left {
@@ -234,12 +234,12 @@ const printHtmlInIframe = (html) => {
           @media print {
             html,
             body {
-                width: 3in;
+                width: auto;
               }
 
             .bill-wrap {
-                width: 2.84in;
-                max-width: 2.84in;
+                width: 100%;
+                max-width: 132mm;
                 page-break-inside: avoid;
             }
           }
