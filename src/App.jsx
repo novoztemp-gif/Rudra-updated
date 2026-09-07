@@ -548,6 +548,7 @@ export default function App() {
             invoices={invoices}
             products={products}
             purchases={purchases}
+            customers={customers}
           />
         );
 

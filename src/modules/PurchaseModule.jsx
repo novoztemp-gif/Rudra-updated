@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import { generateId, today } from "../utils/helpers";
 import { formatCurrency, formatDate } from "../utils/formatters";
+import { escapeHtml, printHtmlInIframe } from "../utils/printBill";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -12,6 +13,67 @@ import { Modal } from "../components/ui/Modal";
 import { Select } from "../components/ui/Select";
 import { Icons } from "../components/ui/Icons";
 import { PartyForm } from "./CustomerModule";
+
+const buildPurchaseBillHTML = (purchase, supplier) => {
+  const rows = purchase.items
+    .map((item) => {
+      const qtyText = `${item.qty} ${item.unit || ""}`.trim();
+      const rateText = formatCurrency(item.purchaseRate);
+      const amountText = formatCurrency(item.amount);
+
+      return `
+        <div class="item">
+          <div class="item-name">${escapeHtml(item.name)}</div>
+          <div class="item-meta">
+            <div class="item-left">
+              Qty: ${escapeHtml(qtyText)} × ${rateText}
+            </div>
+            <div class="item-right">${amountText}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="bill-wrap">
+      <div class="bill-info">
+        <div class="bill-info-row">
+          <div class="bill-info-label">Purchase No</div>
+          <div class="bill-info-value">${escapeHtml(purchase.purchaseNo)}</div>
+        </div>
+        <div class="bill-info-row">
+          <div class="bill-info-label">Date</div>
+          <div class="bill-info-value">${formatDate(purchase.date)}</div>
+        </div>
+        <div class="bill-info-row">
+          <div class="bill-info-label">Supplier Invoice No</div>
+          <div class="bill-info-value">${escapeHtml(purchase.invoiceNo || "—")}</div>
+        </div>
+
+        <div class="customer-box">
+          <div class="bill-info-row">
+            <div class="bill-info-label">Supplier</div>
+            <div class="bill-info-value">${escapeHtml(supplier?.name || purchase.supplierName || "—")}</div>
+          </div>
+          <div class="bill-info-row">
+            <div class="bill-info-label">GSTIN</div>
+            <div class="bill-info-value">${escapeHtml(supplier?.gstin || "—")}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bill-line"></div>
+
+      ${rows}
+
+      <div class="total-box">
+        <div>Total</div>
+        <div>${formatCurrency(purchase.total)}</div>
+      </div>
+    </div>
+  `;
+};
 
 const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
   return (
@@ -214,6 +276,21 @@ export const PurchaseModule = ({
       >
         {showView && (
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                onClick={() =>
+                  printHtmlInIframe(
+                    buildPurchaseBillHTML(
+                      showView,
+                      suppliers.find((s) => s.id === showView.supplierId)
+                    )
+                  )
+                }
+              >
+                <Icons.printer size={14} /> Print / Save PDF
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
               <div className="p-3 bg-gray-50 rounded">
                 <div className="text-xs text-gray-500">Supplier</div>

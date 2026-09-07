@@ -76,7 +76,7 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
 const SearchableCreateSelect = ({
   label,
   value,
-  options,
+  options = [],
   placeholder,
   onChange,
   onCreate,

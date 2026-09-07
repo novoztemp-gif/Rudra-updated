@@ -9,7 +9,9 @@ import {
   formatDate,
   numberToWords,
 } from "../utils/formatters";
-import { STATES } from "../constants";
+import { STATES, PRODUCT_CATEGORIES, UNITS } from "../constants";
+import * as productCategoriesService from "../services/productCategories";
+import * as unitsService from "../services/units";
 import QRCode from "qrcode.react";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -230,6 +232,12 @@ export const InvoiceCreator = ({
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
 
+  // Same category/unit master data ProductForm needs on the Inventory page —
+  // fetched here too since this "+ Add Product" shortcut renders the same
+  // ProductForm but isn't nested inside InventoryModule.
+  const [categoryRows, setCategoryRows] = useState([]);
+  const [unitRows, setUnitRows] = useState([]);
+
   const taxInputRef = useRef(null);
 
   useEffect(() => {
@@ -238,6 +246,77 @@ export const InvoiceCreator = ({
       taxInputRef.current.select();
     }
   }, [editOverallTax]);
+
+  useEffect(() => {
+    const loadMasterData = async () => {
+      try {
+        const [cats, units] = await Promise.all([
+          productCategoriesService.getAll(),
+          unitsService.getAll(),
+        ]);
+
+        setCategoryRows(
+          cats?.length ? cats : PRODUCT_CATEGORIES.map((name) => ({ id: name, name }))
+        );
+        setUnitRows(
+          units?.length ? units : UNITS.map((name) => ({ id: name, name }))
+        );
+      } catch (err) {
+        console.error("Failed to load categories/units:", err);
+        setCategoryRows(PRODUCT_CATEGORIES.map((name) => ({ id: name, name })));
+        setUnitRows(UNITS.map((name) => ({ id: name, name })));
+      }
+    };
+
+    loadMasterData();
+  }, []);
+
+  const categoryOptions = categoryRows.map((c) => c.name);
+  const unitOptions = unitRows.map((u) => u.name);
+
+  const handleCreateCategory = async (name) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return null;
+
+    const existing = categoryRows.find(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return existing.name;
+
+    try {
+      const created = await productCategoriesService.create({ name: trimmed });
+      const row = created?.id ? created : { id: created?.name || trimmed, name: created?.name || trimmed };
+      setCategoryRows((prev) => [...prev, row].sort((a, b) => a.name.localeCompare(b.name)));
+      showToast?.("Category added successfully", "success");
+      return row.name;
+    } catch (err) {
+      console.error("Category create error:", err);
+      showToast?.(err.message || "Failed to add category", "error");
+      return null;
+    }
+  };
+
+  const handleCreateUnit = async (name) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return null;
+
+    const existing = unitRows.find(
+      (u) => u.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return existing.name;
+
+    try {
+      const created = await unitsService.create({ name: trimmed });
+      const row = created?.id ? created : { id: created?.name || trimmed, name: created?.name || trimmed };
+      setUnitRows((prev) => [...prev, row].sort((a, b) => a.name.localeCompare(b.name)));
+      showToast?.("Unit added successfully", "success");
+      return row.name;
+    } catch (err) {
+      console.error("Unit create error:", err);
+      showToast?.(err.message || "Failed to add unit", "error");
+      return null;
+    }
+  };
 
   const handleSaveCustomer = (entity) => {
     const newCustomer = { ...entity, id: generateId() };
@@ -261,6 +340,10 @@ export const InvoiceCreator = ({
   };
 
   const selectedProduct = products.find((p) => p.id === itemForm.productId);
+  const addedProductIds = new Set(form.items.map((i) => i.productId));
+  const selectableProducts = products.filter(
+    (p) => !addedProductIds.has(p.id) || p.id === itemForm.productId
+  );
   const selectedCustomer = customers.find((c) => c.id === form.customerId);
   const isInterState =
     selectedCustomer && selectedCustomer.state !== company.stateCode;
@@ -665,7 +748,7 @@ export const InvoiceCreator = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-start">
             <div className="sm:col-span-2 lg:col-span-5">
               <ProductSearchDropdown
-                products={products}
+                products={selectableProducts}
                 productSearch={productSearch}
                 setProductSearch={setProductSearch}
                 selectedProductId={itemForm.productId}
@@ -946,6 +1029,10 @@ export const InvoiceCreator = ({
         title="Add New Product"
       >
         <ProductForm
+          categories={categoryOptions}
+          units={unitOptions}
+          onCreateCategory={handleCreateCategory}
+          onCreateUnit={handleCreateUnit}
           onSave={handleSaveProduct}
           onCancel={() => setShowAddProduct(false)}
         />

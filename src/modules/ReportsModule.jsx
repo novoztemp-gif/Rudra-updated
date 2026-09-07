@@ -156,7 +156,7 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
   );
 };
 
-export const ReportsModule = ({ invoices, products, purchases }) => {
+export const ReportsModule = ({ invoices, products, purchases, customers = [] }) => {
   const [tab, setTab] = useState("sales");
   const [range, setRange] = useState("this_month");
 
@@ -348,6 +348,9 @@ export const ReportsModule = ({ invoices, products, purchases }) => {
   const topCustomerEntry = Object.entries(customerSalesMap).find(
     ([, value]) => value === topCustomerAmount
   );
+  const topCustomerName = topCustomerEntry
+    ? customers.find((c) => c.id === topCustomerEntry[0])?.name || "Unknown Customer"
+    : null;
 
   const dailySalesRows = useMemo(() => {
     const map = {};
@@ -472,7 +475,7 @@ export const ReportsModule = ({ invoices, products, purchases }) => {
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <div className="text-xs text-gray-500">Top Customer</div>
                     <div className="mt-1 font-semibold text-gray-900">
-                      {topCustomerEntry ? topCustomerEntry[0] : "—"}
+                      {topCustomerName || "—"}
                     </div>
                     <div className="text-sm text-gray-600">
                       {topCustomerEntry
