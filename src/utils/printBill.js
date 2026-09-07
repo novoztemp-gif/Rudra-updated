@@ -19,6 +19,39 @@ export const printHtmlInIframe = (html) => {
   iframe.style.height = "0";
   iframe.style.border = "0";
   iframe.setAttribute("aria-hidden", "true");
+
+  const cleanup = () => {
+    if (iframe.parentNode) {
+      iframe.parentNode.removeChild(iframe);
+    }
+  };
+
+  // Trigger the print off the iframe's own load event instead of a fixed
+  // delay. A guessed setTimeout is either too short (prints a half-rendered
+  // or blank document on a slow machine) or, on some Safari/Chrome builds,
+  // long enough that the print call no longer counts as tied to the click
+  // that started it and the dialog silently never opens — both of which
+  // match "print itself not coming" reports.
+  //
+  // Gotcha: `onload` actually fires twice here — once immediately for the
+  // iframe's own blank initial document (as soon as it's inserted), and
+  // again for the real content once doc.write()/close() below run. Only the
+  // second firing means our bill is actually ready; reacting to the first
+  // one prints a blank page and tears the iframe down before we ever get a
+  // chance to write the real content into it. `contentWritten` distinguishes
+  // the two regardless of how many times the browser happens to fire it.
+  let contentWritten = false;
+  iframe.onload = () => {
+    if (!contentWritten) return;
+    const win = iframe.contentWindow;
+    win.onafterprint = cleanup;
+    // Fallback in case onafterprint never fires (seen on some older Safari
+    // versions) so the hidden iframe doesn't linger indefinitely.
+    setTimeout(cleanup, 60000);
+    win.focus();
+    win.print();
+  };
+
   document.body.appendChild(iframe);
 
   const doc = iframe.contentWindow.document;
@@ -199,16 +232,6 @@ export const printHtmlInIframe = (html) => {
       </body>
     </html>
   `);
+  contentWritten = true;
   doc.close();
-
-  setTimeout(() => {
-    iframe.contentWindow.focus();
-
-    // Listen for when the print dialog is closed (either printed or cancelled)
-    iframe.contentWindow.onafterprint = () => {
-      document.body.removeChild(iframe);
-    };
-
-    iframe.contentWindow.print();
-  }, 400);
 };
