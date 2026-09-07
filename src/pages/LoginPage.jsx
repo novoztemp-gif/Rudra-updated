@@ -23,44 +23,41 @@ export function LoginPage({ onLogin, isLoading }) {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 items-center justify-center">
+      <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 text-sm">Verifying credentials...</p>
+          <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-800 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500 text-sm">Verifying credentials...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100">
+    <div className="flex h-screen bg-gray-50">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex-col items-center justify-center px-8 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-brand-900 flex-col items-center justify-center px-8 relative overflow-hidden">
         {/* Subtle background pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-10 left-10 w-72 h-72 bg-white rounded-full mix-blend-multiply filter blur-xl"></div>
-          <div className="absolute bottom-10 right-10 w-72 h-72 bg-slate-500 rounded-full mix-blend-multiply filter blur-xl"></div>
+        <div className="absolute inset-0 opacity-[0.06]">
+          <div className="absolute top-10 left-10 w-72 h-72 bg-accent-400 rounded-full mix-blend-multiply filter blur-xl"></div>
+          <div className="absolute bottom-10 right-10 w-72 h-72 bg-brand-400 rounded-full mix-blend-multiply filter blur-xl"></div>
         </div>
 
         <div className="relative z-10 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md mb-6">
-            <div className="w-10 h-10 bg-white rounded flex items-center justify-center text-slate-900 text-lg font-bold">R</div>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-3">Rudra Granites</h1>
-          <p className="text-slate-300 text-lg mb-12">Point of Sale System</p>
+          <h1 className="text-2xl font-semibold text-white tracking-wide mb-1">RUDRA GRANITES</h1>
+          <p className="text-accent-400 text-sm font-semibold tracking-widest mb-12">POS SYSTEM</p>
 
           <div className="max-w-sm mx-auto space-y-6">
-            <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10">
-              <div className="flex items-center gap-3 text-slate-200 text-sm mb-2">
-                <Icons.check size={16} />
-                <span>Complete invoice & billing management</span>
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-left">
+              <div className="flex items-center gap-3 text-brand-100 text-sm mb-2">
+                <Icons.check size={16} className="text-accent-400 shrink-0" />
+                <span>Complete invoice &amp; billing management</span>
               </div>
-              <div className="flex items-center gap-3 text-slate-200 text-sm mb-2">
-                <Icons.check size={16} />
-                <span>E-invoice & E-way bill compliance</span>
+              <div className="flex items-center gap-3 text-brand-100 text-sm mb-2">
+                <Icons.check size={16} className="text-accent-400 shrink-0" />
+                <span>E-invoice &amp; E-way bill compliance</span>
               </div>
-              <div className="flex items-center gap-3 text-slate-200 text-sm">
-                <Icons.check size={16} />
+              <div className="flex items-center gap-3 text-brand-100 text-sm">
+                <Icons.check size={16} className="text-accent-400 shrink-0" />
                 <span>Real-time inventory tracking</span>
               </div>
             </div>
@@ -73,17 +70,14 @@ export function LoginPage({ onLogin, isLoading }) {
         <div className="w-full max-w-sm">
           {/* Mobile branding */}
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-slate-900 mb-3">
-              <div className="text-white text-sm font-bold">R</div>
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900">Rudra Granites</h1>
-            <p className="text-slate-500 text-sm">POS System</p>
+            <h1 className="text-lg font-semibold text-brand-900 tracking-wide">RUDRA GRANITES</h1>
+            <p className="text-accent-600 text-xs font-semibold tracking-widest">POS SYSTEM</p>
           </div>
 
           {/* Login form */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome back</h2>
-            <p className="text-slate-500 text-sm mb-8">Enter your credentials to access the system</p>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h2 className="text-xl font-semibold text-brand-900 mb-2">Welcome back</h2>
+            <p className="text-gray-500 text-sm mb-8">Enter your credentials to access the system</p>
 
             {error && (
               <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -93,7 +87,7 @@ export function LoginPage({ onLogin, isLoading }) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Email Address
                 </label>
                 <input
@@ -103,13 +97,13 @@ export function LoginPage({ onLogin, isLoading }) {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   disabled={isSubmitting}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2.5 rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Password
                 </label>
                 <input
@@ -119,7 +113,7 @@ export function LoginPage({ onLogin, isLoading }) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   disabled={isSubmitting}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2.5 rounded-md border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   required
                 />
               </div>
@@ -127,7 +121,7 @@ export function LoginPage({ onLogin, isLoading }) {
               <button
                 type="submit"
                 disabled={isSubmitting || !email || !password}
-                className="w-full mt-6 px-4 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mt-6 px-4 py-2.5 bg-brand-900 text-white text-sm font-medium rounded-md hover:bg-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>

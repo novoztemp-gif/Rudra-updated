@@ -5,6 +5,8 @@ const mapDispatch = (row) => ({
   dispatchNo: row.dispatch_no,
   invoiceId: row.invoice_id,
   invoiceNo: row.invoice_no,
+  transporterId: row.transporter_id,
+  transporterName: row.transporter_name,
   vehicleNo: row.vehicle_no,
   destination: row.destination,
   deliveryTerms: row.delivery_terms,
@@ -18,6 +20,8 @@ const unmapDispatch = (obj) => ({
   dispatch_no: obj.dispatchNo,
   invoice_id: obj.invoiceId,
   invoice_no: obj.invoiceNo,
+  transporter_id: obj.transporterId || null,
+  transporter_name: obj.transporterName || null,
   vehicle_no: obj.vehicleNo,
   destination: obj.destination,
   delivery_terms: obj.deliveryTerms,
@@ -52,6 +56,8 @@ export async function update(id, changes) {
   if ("dispatchNo" in changes) updateData.dispatch_no = changes.dispatchNo;
   if ("invoiceId" in changes) updateData.invoice_id = changes.invoiceId;
   if ("invoiceNo" in changes) updateData.invoice_no = changes.invoiceNo;
+  if ("transporterId" in changes) updateData.transporter_id = changes.transporterId || null;
+  if ("transporterName" in changes) updateData.transporter_name = changes.transporterName || null;
   if ("vehicleNo" in changes) updateData.vehicle_no = changes.vehicleNo;
   if ("destination" in changes) updateData.destination = changes.destination;
   if ("deliveryTerms" in changes) updateData.delivery_terms = changes.deliveryTerms;

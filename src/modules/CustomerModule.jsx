@@ -21,11 +21,11 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
     <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-gray-50">
+          <tr className="bg-brand-50/60 border-b border-gray-200">
             {columns.map((col, idx) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${
+                className={`px-4 py-3 text-left font-semibold text-brand-800 border-b border-gray-200 ${
                   idx !== columns.length - 1 ? "border-r border-gray-200" : ""
                 } ${col.align === "right" ? "text-right" : ""}`}
               >
@@ -48,7 +48,7 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
             data.map((row, rowIndex) => (
               <tr
                 key={row.id || row.invoiceNo || row.name || rowIndex}
-                className="bg-white hover:bg-gray-50"
+                className="bg-white hover:bg-brand-50/40"
               >
                 {columns.map((col, colIndex) => (
                   <td

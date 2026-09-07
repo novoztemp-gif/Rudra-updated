@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component {
         <div className="flex h-screen bg-gray-50 items-center justify-center p-4">
           <div className="text-center max-w-lg">
             <div className="text-red-600 text-6xl mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
+            <h1 className="text-2xl font-bold text-brand-900 mb-2">Something went wrong</h1>
             <p className="text-gray-600 mb-4">
               The screen hit an unexpected error and couldn't continue. Reloading will take you back to a working state.
             </p>
@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component {
             </pre>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800"
+              className="px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800"
             >
               Reload
             </button>

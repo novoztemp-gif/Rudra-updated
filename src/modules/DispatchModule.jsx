@@ -15,11 +15,11 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
     <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-gray-50">
+          <tr className="bg-brand-50/60 border-b border-gray-200">
             {columns.map((col, idx) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${
+                className={`px-4 py-3 text-left font-semibold text-brand-800 border-b border-gray-200 ${
                   idx !== columns.length - 1 ? "border-r border-gray-200" : ""
                 } ${col.align === "right" ? "text-right" : ""}`}
               >
@@ -42,7 +42,7 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
             data.map((row, rowIndex) => (
               <tr
                 key={row.id || row.dispatchNo || rowIndex}
-                className="bg-white hover:bg-gray-50"
+                className="bg-white hover:bg-brand-50/40"
               >
                 {columns.map((col, colIndex) => (
                   <td
@@ -69,6 +69,7 @@ export const DispatchModule = ({
   invoices,
   dispatches,
   setDispatches,
+  transporters = [],
   showToast,
 }) => {
   const [showForm, setShowForm] = useState(false);
@@ -112,6 +113,13 @@ export const DispatchModule = ({
               render: (r) => <span className="font-mono">{r.dispatchNo}</span>,
             },
             { key: "invoiceNo", label: "Invoice #" },
+            {
+              key: "transporterId",
+              label: "Transporter",
+              render: (r) =>
+                transporters.find((t) => t.id === r.transporterId)?.transName ||
+                "—",
+            },
             { key: "vehicleNo", label: "Vehicle" },
             { key: "destination", label: "Destination" },
             { key: "deliveryTerms", label: "Terms" },
@@ -159,6 +167,7 @@ export const DispatchModule = ({
         <DispatchForm
           invoices={invoices}
           dispatches={dispatches}
+          transporters={transporters}
           onSave={saveDispatch}
           onCancel={() => setShowForm(false)}
           showToast={showToast}
@@ -171,12 +180,14 @@ export const DispatchModule = ({
 export const DispatchForm = ({
   invoices,
   dispatches,
+  transporters = [],
   onSave,
   onCancel,
   showToast,
 }) => {
   const [f, setF] = useState({
     invoiceId: "",
+    transporterId: "",
     vehicleNo: "",
     destination: "",
     deliveryTerms: "",
@@ -207,6 +218,15 @@ export const DispatchForm = ({
     };
   });
 
+  const transporterOptions = transporters.map((t) => ({
+    value: t.id,
+    label: `${t.transName} (${t.contact || "no contact"})`,
+  }));
+
+  const selectedTransporter = transporters.find(
+    (t) => t.id === f.transporterId
+  );
+
   const handleSave = () => {
     if (!f.invoiceId) {
       showToast?.("Select an invoice", "warning");
@@ -226,6 +246,8 @@ export const DispatchForm = ({
       dispatchNo: nextDispatchNo,
       invoiceId: f.invoiceId,
       invoiceNo: inv?.invoiceNo || "",
+      transporterId: f.transporterId,
+      transporterName: selectedTransporter?.transName || "",
       vehicleNo: f.vehicleNo,
       destination: f.destination,
       deliveryTerms: f.deliveryTerms,
@@ -241,6 +263,25 @@ export const DispatchForm = ({
         value={f.invoiceId}
         onChange={(e) => set("invoiceId", e.target.value)}
       />
+
+      <div>
+        <Select
+          label="Transporter"
+          options={transporterOptions}
+          value={f.transporterId}
+          onChange={(e) => set("transporterId", e.target.value)}
+        />
+        {transporterOptions.length === 0 && (
+          <p className="mt-1 text-xs text-gray-500">
+            No transporters saved yet — add one under Transporters first.
+          </p>
+        )}
+        {selectedTransporter && (
+          <p className="mt-1 text-xs text-gray-500">
+            {selectedTransporter.address}
+          </p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input

@@ -448,7 +448,7 @@ export default function App() {
     return (
       <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-800 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-600 text-sm">Loading...</p>
         </div>
       </div>
@@ -530,6 +530,7 @@ export default function App() {
             invoices={invoices.filter((i) => i.invoiceType === "retail")}
             dispatches={dispatches}
             setDispatches={setDispatches}
+            transporters={transporters}
             showToast={showToast}
           />
         );
@@ -567,7 +568,7 @@ export default function App() {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-800 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading POS System...</p>
         </div>
       </div>
@@ -579,7 +580,7 @@ export default function App() {
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-red-600 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-bold text-brand-900 mb-2">
             Connection Error
           </h1>
           <p className="text-gray-600 mb-6">{error}</p>
@@ -588,7 +589,7 @@ export default function App() {
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-6 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800"
+            className="mt-6 px-4 py-2 bg-brand-900 text-white rounded-md hover:bg-brand-800"
           >
             Retry
           </button>
@@ -607,25 +608,16 @@ export default function App() {
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-56 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-brand-900 flex flex-col transform transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}
       >
-        <div className="px-4 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gray-900 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0">
-              R
-            </div>
-            <div className="min-w-0">
-              <div className="text-[15px] font-semibold text-gray-900 truncate leading-tight">
-                Rudra Granites
-              </div>
-              <div className="text-xs text-gray-400 truncate leading-tight mt-0.5">
-                POS System
-              </div>
-            </div>
+        <div className="px-4 py-5 border-b border-white/10">
+          <div className="text-[13px] font-semibold text-white tracking-wide leading-snug">
+            RUDRA GRANITES
           </div>
-
-
+          <div className="text-[13px] font-semibold text-accent-400 tracking-wide leading-snug">
+            POS SYSTEM
+          </div>
         </div>
 
         <nav className="flex-1 px-3 py-3 overflow-y-auto">
@@ -638,14 +630,14 @@ export default function App() {
                 <button
                   key={item.key}
                   onClick={() => navigate(item.key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all ${isActive
-                    ? "bg-gray-100 text-gray-900 font-semibold"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-md transition-all border-l-2 ${isActive
+                    ? "bg-white/10 text-white font-semibold border-accent-500"
+                    : "text-brand-200 border-transparent hover:bg-white/5 hover:text-white"
                     }`}
                 >
                   <IconComp
                     size={16}
-                    className={isActive ? "text-gray-900" : "text-gray-600"}
+                    className={isActive ? "text-accent-400" : "text-brand-300"}
                   />
                   <span className="truncate flex-1 text-left">{item.label}</span>
                   {item.key === "inventory" && lowStockCount > 0 && (
@@ -670,7 +662,7 @@ export default function App() {
               <Icons.menu size={20} />
             </button>
             <div>
-              <h1 className="text-base font-semibold text-gray-900">
+              <h1 className="text-base font-semibold text-brand-900">
                 {currentNav?.label || "Dashboard"}
               </h1>
               <p className="text-xs text-gray-400">{COMPANY.name}</p>
@@ -679,14 +671,14 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-brand-900">
                 {user?.email?.split("@")[0]}
               </p>
               <p className="text-xs text-gray-400">{user?.email}</p>
             </div>
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-brand-900 hover:bg-gray-100 rounded-lg transition-colors"
             >
               Logout
             </button>

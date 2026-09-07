@@ -7,6 +7,8 @@ import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
 import { Tabs } from "../components/ui/Tabs";
 import { Icons } from "../components/ui/Icons";
+import { SalesTrendChart } from "../components/charts/SalesTrendChart";
+import { ProductRevenuePieChart } from "../components/charts/ProductRevenuePieChart";
 
 const parseDateSafe = (value) => {
   if (!value) return null;
@@ -83,13 +85,13 @@ const MetricCard = ({ label, value, icon, sub, trend }) => (
         <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
           {label}
         </p>
-        <p className="mt-2 text-xl font-semibold text-gray-900">{value}</p>
+        <p className="mt-2 text-xl font-semibold text-brand-900">{value}</p>
         <div className="mt-2 flex items-center gap-2">
           <TrendText value={trend} />
           {sub ? <span className="text-xs text-gray-400">{sub}</span> : null}
         </div>
       </div>
-      <div className="rounded-lg bg-gray-100 p-2 text-gray-700">{icon}</div>
+      <div className="rounded-lg bg-brand-50 p-2 text-brand-700">{icon}</div>
     </div>
   </div>
 );
@@ -99,11 +101,11 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
     <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-gray-50">
+          <tr className="bg-brand-50/60 border-b border-gray-200">
             {columns.map((col, idx) => (
               <th
                 key={col.key}
-                className={`px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200 ${
+                className={`px-4 py-3 text-left font-semibold text-brand-800 border-b border-gray-200 ${
                   idx !== columns.length - 1 ? "border-r border-gray-200" : ""
                 } ${col.align === "right" ? "text-right" : ""}`}
               >
@@ -133,7 +135,7 @@ const StyledTable = ({ columns, data, emptyMsg = "No data available" }) => {
                   row.date ||
                   rowIndex
                 }
-                className="bg-white hover:bg-gray-50"
+                className="bg-white hover:bg-brand-50/40"
               >
                 {columns.map((col, colIndex) => (
                   <td
@@ -412,7 +414,7 @@ export const ReportsModule = ({ invoices, products, purchases, customers = [] })
             onClick={() => setRange(opt.key)}
             className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
               range === opt.key
-                ? "border-gray-900 bg-gray-900 text-white"
+                ? "border-brand-900 bg-brand-900 text-white"
                 : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
             }`}
           >
@@ -455,12 +457,18 @@ export const ReportsModule = ({ invoices, products, purchases, customers = [] })
               />
             </div>
 
+            <Card title="Sales Trend">
+              <div className="p-4">
+                <SalesTrendChart rows={dailySalesRows} />
+              </div>
+            </Card>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <Card title="Top Insight">
                 <div className="space-y-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="rounded-lg border border-gray-200 bg-brand-50/50 p-3">
                     <div className="text-xs text-gray-500">Top Product</div>
-                    <div className="mt-1 font-semibold text-gray-900">
+                    <div className="mt-1 font-semibold text-brand-900">
                       {topProduct?.name || "—"}
                     </div>
                     <div className="text-sm text-gray-600">
@@ -472,9 +480,9 @@ export const ReportsModule = ({ invoices, products, purchases, customers = [] })
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="rounded-lg border border-gray-200 bg-brand-50/50 p-3">
                     <div className="text-xs text-gray-500">Top Customer</div>
-                    <div className="mt-1 font-semibold text-gray-900">
+                    <div className="mt-1 font-semibold text-brand-900">
                       {topCustomerName || "—"}
                     </div>
                     <div className="text-sm text-gray-600">
@@ -607,6 +615,12 @@ export const ReportsModule = ({ invoices, products, purchases, customers = [] })
                 sub={topProduct ? topProduct.name : "No data"}
               />
             </div>
+
+            <Card title="Revenue Share by Product">
+              <div className="p-4">
+                <ProductRevenuePieChart productSales={productSales} />
+              </div>
+            </Card>
 
             <Card title="Product-wise Sales">
               <StyledTable
